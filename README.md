@@ -61,7 +61,7 @@ The project is split into two distinct parts:
 * **MongoDB & Mongoose**: NoSQL database for flexible data modeling (Users, Videos, Comments).
 * **JWT (JSON Web Tokens)**: For stateless authentication.
 * **Multer**: For handling file uploads (Videos/Images).
-* **Cloudinary** *(Optional/Recommended)*: Cloud storage for media assets.
+* **Cloudinary** : Cloud storage for media assets.
 
 ---
 
@@ -87,3 +87,4 @@ Videora_Video-Tube/
     │   ├── 📂 store/          # State management (Redux slices)
     │   └── main.jsx           # React entry point
     └── package.json           # Frontend dependencies
+
