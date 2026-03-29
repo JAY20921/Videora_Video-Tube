@@ -55,10 +55,4 @@ app.use("/api/v1/comments", commentRouter)
 app.use("/api/v1/likes", likeRouter)
 app.use("/api/v1/playlist", playlistRouter)
 app.use("/api/v1/dashboard", dashboardRouter)
-
-
-//routes declaration
-app.use("/api/v1/users", userRouter);
-
-
 export { app }

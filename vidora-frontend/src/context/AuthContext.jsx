@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
+import React, { createContext, useState, useEffect, useContext, useMemo, useCallback } from "react";
 import * as authApi from "../api/auth"; // import your auth API functions
 
 const AuthContext = createContext(null);
@@ -9,36 +9,47 @@ export const AuthProvider = ({ children }) => {
 
   // Fetch the current user when the app loads
   useEffect(() => {
+    let isMounted = true;
     const fetchCurrentUser = async () => {
       try {
         if (authApi.getCurrentUser) {
           const res = await authApi.getCurrentUser();
           // Backend may return { user } or the user object directly
-          setUser(res?.user ?? res?.data ?? res);
+          if (isMounted) {
+            setUser(res?.user ?? res?.data ?? res);
+          }
         }
-      } catch (err) {
-        setUser(null); // silent fail
+      } catch {
+        if (isMounted) setUser(null); // silent fail
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
 
     fetchCurrentUser();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // Logout function
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     try {
       if (authApi.logout) await authApi.logout();
-    } catch (err) {
+    } catch {
       // ignore errors
     }
     localStorage.removeItem("accessToken");
     setUser(null);
-  };
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, setUser, loading, handleLogout }),
+    [user, loading, handleLogout]
+  );
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, handleLogout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
