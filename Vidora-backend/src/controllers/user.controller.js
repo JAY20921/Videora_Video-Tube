@@ -7,17 +7,28 @@ import  jwt  from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
 
+const sanitizeUserResponse = (userDoc) => {
+    const user = userDoc.toObject();
+    delete user.password;
+    delete user.refreshToken;
+    return user;
+};
+
+const generateTokensForUser = async (user) => {
+    const refreshToken = user.generateRefreshToken();
+    const accessToken = user.generateAccessToken();
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+    return { refreshToken, accessToken };
+};
+
 const generateAccessAndRefreshTokens = async(userId)=>{
-    try{    
-
-      const user =   await User.findById(userId);
-      const refreshToken = user.generateRefreshToken()
-      const accessToken = user.generateAccessToken()
-
-      user.refreshToken = refreshToken
-     await user.save({ validateBeforeSave: false })
-
-     return { refreshToken, accessToken }
+    try{
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new ApiError(404, "User not found");
+      }
+      return await generateTokensForUser(user);
     }
     catch(error){
         throw new ApiError(500, "Something Went Wrong while generating access token")
@@ -73,11 +84,12 @@ const registerUser = asyncHandler(async (req,res) => {
 
     //upload images to cloudinary, avatar 
 
-    const avatar  =  await uploadOnCloudinary(avatarLocalPath, "avatars")
-    let coverImage = null;
-    if (coverImageLocalPath) {
-            coverImage = await uploadOnCloudinary(coverImageLocalPath, "coverImages");
-            }
+    const [avatar, coverImage] = await Promise.all([
+        uploadOnCloudinary(avatarLocalPath, "avatars"),
+        coverImageLocalPath
+            ? uploadOnCloudinary(coverImageLocalPath, "coverImages")
+            : Promise.resolve(null)
+    ]);
 
     
     
@@ -100,21 +112,19 @@ const registerUser = asyncHandler(async (req,res) => {
 
    
     //remove password and refreshToken from response
- const createdUser = await User.findById(user._id).select(
-        "-password -refreshToken"
-    )
+ const registeredUser = sanitizeUserResponse(user);
     
 
     //check if user is created successfully
 
-    if(!createdUser){
+    if(!user?._id){
         throw new ApiError(500,"Something went Wrong while registering User")
     }
 
     //return response
 
     return res.status(201).json(
-        new ApiResponse(200, createdUser, "User register Successfully!")
+        new ApiResponse(200, registeredUser, "User register Successfully!")
     )
 
 
@@ -144,8 +154,8 @@ const loginUser = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Password is not valid");
   }
 
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id);
-  const loggedInUser = await User.findById(user._id).select("-password -refreshToken");
+  const { accessToken, refreshToken } = await generateTokensForUser(user);
+  const loggedInUser = sanitizeUserResponse(user);
 
   const options = { httpOnly: true, secure: true };
 

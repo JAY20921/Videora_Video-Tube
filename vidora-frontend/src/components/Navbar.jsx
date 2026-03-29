@@ -1,5 +1,5 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import SearchBar from "./SearchBar";
 import { useAuth } from "../context/AuthContext";
 import UserMenu from "./UserMenu";
@@ -7,6 +7,8 @@ import UserMenu from "./UserMenu";
 export default function Navbar() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const isAuthPage = pathname === "/login" || pathname === "/register";
 
   return (
     <header className="w-full bg-gradient-to-b from-neutral-900/70 to-transparent border-b border-neutral-800 sticky top-0 z-40">
@@ -19,7 +21,7 @@ export default function Navbar() {
         </Link>
 
         <div className="flex-1">
-          <SearchBar />
+          {!isAuthPage ? <SearchBar /> : null}
         </div>
 
         <div className="flex items-center gap-3">
