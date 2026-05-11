@@ -13,6 +13,7 @@ import SideNav from "./components/SideNav";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { motion } from "framer-motion";
 import "./index.css";
+
 export default function App() {
   return (
     <div className="min-h-screen bg-neutral-900 text-gray-100 flex">
