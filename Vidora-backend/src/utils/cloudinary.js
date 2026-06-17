@@ -1,37 +1,38 @@
-import {v2 as cloudinary}  from 'cloudinary';
-import fs from 'fs';
-
+import { v2 as cloudinary } from "cloudinary";
+import fs from "fs";
+import { config } from "../config/index.js";
+import { logger } from "./logger.js";
 
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});                            
+  cloud_name: config.cloudinary.cloudName,
+  api_key: config.cloudinary.apiKey,
+  api_secret: config.cloudinary.apiSecret,
+});
 
- const uploadOnCloudinary = async (localFilePath, folder) => {
-    try {
-        if(!localFilePath){
-            throw new Error("File path is required");
-        }
-        // Upload file to Cloudinary
-       const response = await cloudinary.uploader.upload(localFilePath, {
-            resource_type: "auto",
+/**
+ * @param {string} localFilePath  - Absolute path to the temp file on disk
+ * @param {string} folder         - Cloudinary folder (e.g. "avatars", "videos", "thumbnails")
+ * @returns {Promise<object|null>} - Cloudinary upload response, or null on failure
+ */
+export const uploadOnCloudinary = async (localFilePath, folder = "misc") => {
+  try {
+    if (!localFilePath) throw new Error("File path is required");
 
-        })
-        //File uploaded successfully
-        // console.log("File uploaded to Cloudinary successfully", response.url);
-        fs.unlinkSync(localFilePath)
+    const response = await cloudinary.uploader.upload(localFilePath, {
+      resource_type: "auto",
+      folder: `vidora/${folder}`, // ← fixed: folder is now used
+    });
 
-        return response;
+    // Clean up the local temp file after successful upload
+    if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+
+    return response;
+  } catch (error) {
+    // Always clean up temp file, even on failure
+    if (localFilePath && fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
     }
-    catch (error) {
-if (localFilePath && fs.existsSync(localFilePath)) {
-    fs.unlinkSync(localFilePath);
-}
-        console.error("Error uploading file to Cloudinary", error);
-        return null;
-    }
-}
-
-
-export  {uploadOnCloudinary};
+    logger.error({ err: error }, "Cloudinary upload failed");
+    return null;
+  }
+};

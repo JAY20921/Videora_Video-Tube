@@ -1,45 +1,52 @@
-// require('dotenv').config({path: './env'});
 import dotenv from "dotenv";
+dotenv.config();
+
 import connectDB from "./db/index.js";
 import { app } from "./app.js";
+import { logger } from "./utils/logger.js";
+import { config } from "./config/index.js";
 
-dotenv.config();
+let server;
+
+const gracefulShutdown = (signal) => {
+  logger.info(`${signal} received — shutting down gracefully`);
+  if (server) {
+    server.close(() => {
+      logger.info("HTTP server closed");
+      process.exit(0);
+    });
+    // Force shutdown after 10 seconds if connections don't close
+    setTimeout(() => {
+      logger.error("Forced shutdown after timeout");
+      process.exit(1);
+    }, 10_000);
+  } else {
+    process.exit(0);
+  }
+};
 
 connectDB()
   .then(() => {
-    const PORT = process.env.PORT || 8000;
+    server = app.listen(config.port, "0.0.0.0", () => {
+      logger.info(`Server running on port ${config.port} [${config.nodeEnv}]`);
+    });
 
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server is running on port ${PORT}`);
+    server.on("error", (error) => {
+      logger.error({ err: error }, "Server error");
+      process.exit(1);
     });
   })
   .catch((error) => {
-    console.error("Failed to connect to the database:", error);
+    logger.error({ err: error }, "Failed to connect to the database");
     process.exit(1);
   });
 
+// ─── Graceful shutdown signals ────────────────────────────────────────────────
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-
-
-
-
-/*
-import express from "express";
-const app = express();
-
-
-(async()=>{ 
-    try {
-      await  mongoose.connect(`${process.env.MONGODB_URI}/${DB_NAME}`)
-        app.on("error", (error) => {
-            console.error("Server error:", error);
-            throw error;
-        });
-        app.listen(process.env.PORT, () => {
-            console.log(`Server is running on port ${process.env.PORT}`);
-        });
-    } catch (error) {
-        console.error("Database connection failed:", error);
-        throw error;
-    }
-}) (); */
+// ─── Unhandled rejection safety net ──────────────────────────────────────────
+process.on("unhandledRejection", (reason) => {
+  logger.error({ reason }, "Unhandled Promise Rejection — shutting down");
+  gracefulShutdown("unhandledRejection");
+});
