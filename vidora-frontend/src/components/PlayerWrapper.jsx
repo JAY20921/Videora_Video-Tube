@@ -107,7 +107,10 @@ export default function PlayerWrapper({ url, poster }) {
 
       <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-gradient-to-t from-black/90 to-transparent flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <button onClick={togglePlay} className="control-btn">
+          <button
+            onClick={togglePlay}
+            className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white"
+          >
             {isPlaying ? <Pause size={18} /> : <Play size={18} />}
           </button>
           <span className="text-xs text-neutral-300">
@@ -116,7 +119,7 @@ export default function PlayerWrapper({ url, poster }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <Gauge size={16} />
+          <Gauge size={16} className="text-white" />
           <select
             value={playbackRate}
             onChange={(e) => {
@@ -132,22 +135,20 @@ export default function PlayerWrapper({ url, poster }) {
         </div>
 
         <div className="flex items-center gap-2">
-          <button onClick={togglePiP} className="control-btn"><PictureInPicture2 size={16} /></button>
-          <button onClick={toggleFullscreen} className="control-btn"><Maximize size={16} /></button>
+          <button
+            onClick={togglePiP}
+            className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white"
+          >
+            <PictureInPicture2 size={16} />
+          </button>
+          <button
+            onClick={toggleFullscreen}
+            className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white"
+          >
+            <Maximize size={16} />
+          </button>
         </div>
       </div>
-
-      <style jsx>{`
-        .control-btn {
-          background: rgba(0,0,0,0.6);
-          padding: 6px;
-          border-radius: 999px;
-          color: white;
-        }
-        .control-btn:hover {
-          background: rgba(255,255,255,0.15);
-        }
-      `}</style>
     </div>
   );
 }

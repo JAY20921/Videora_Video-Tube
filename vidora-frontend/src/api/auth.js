@@ -4,9 +4,7 @@ const unwrap = (res) => res?.data?.data ?? res?.data ?? res;
 
 // Auth
 export const register = (formData) =>
-  api.post("/users/register", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  }).then(unwrap);
+  api.post("/users/register", formData).then(unwrap);
 
 export const login = (data) =>
   api.post("/users/login", data).then(unwrap);
@@ -29,11 +27,7 @@ export const updateAccount = (data) =>
 
 // Files
 export const uploadAvatar = (formData) =>
-  api.patch("/users/avatar", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  }).then(unwrap);
+  api.patch("/users/avatar", formData).then(unwrap);
 
 export const uploadCover = (formData) =>
-  api.patch("/users/cover-image", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  }).then(unwrap);
+  api.patch("/users/cover-image", formData).then(unwrap);

@@ -14,8 +14,8 @@ function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const user = await login({ email, password });
-      setUser(user);
+      const response = await login({ email, password });
+      setUser(response?.user || response);
       toast("Logged in", { type: "success" });
       navigate("/");
     } catch (err) {
