@@ -2,12 +2,20 @@
 import api from "./client";
 
 /**
- * Upsert the current user's watch progress for a video.
- * Called on heartbeat (every 10s) and on pause/beforeunload.
- * Uses navigator.sendBeacon for reliability on tab close.
+ * Save progress via authenticated axios POST.
+ * Used for regular heartbeats (every 10s) where the page is still alive.
  */
 export const saveProgress = async ({ videoId, progressSeconds }) => {
-  // sendBeacon fires even when the page is being unloaded
+  await api.post("/watch-progress", { videoId, progressSeconds });
+};
+
+/**
+ * Fire-and-forget save via navigator.sendBeacon.
+ * ONLY used on beforeunload — sendBeacon doesn't support custom headers,
+ * so this relies on cookies for auth. For cross-origin setups where cookies
+ * aren't sent, this is best-effort (the last heartbeat already saved the position).
+ */
+export const saveProgressBeacon = ({ videoId, progressSeconds }) => {
   if (typeof navigator?.sendBeacon === "function") {
     const blob = new Blob(
       [JSON.stringify({ videoId, progressSeconds })],
@@ -17,10 +25,7 @@ export const saveProgress = async ({ videoId, progressSeconds }) => {
       `${api.defaults.baseURL}/watch-progress`,
       blob
     );
-    return;
   }
-  // Fallback for environments without sendBeacon (e.g. tests)
-  await api.post("/watch-progress", { videoId, progressSeconds });
 };
 
 /**

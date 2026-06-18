@@ -15,6 +15,10 @@ function Login() {
     e.preventDefault();
     try {
       const response = await login({ email, password });
+      // Persist the token so the user stays logged in after refresh
+      if (response?.accessToken) {
+        localStorage.setItem("accessToken", response.accessToken);
+      }
       setUser(response?.user || response);
       toast("Logged in", { type: "success" });
       navigate("/");

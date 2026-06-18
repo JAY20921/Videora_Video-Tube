@@ -1,13 +1,13 @@
 import { useEffect, useRef, useCallback } from "react";
-import { saveProgress, getProgress } from "../api/watchProgress";
+import { saveProgress, saveProgressBeacon, getProgress } from "../api/watchProgress";
 
 const HEARTBEAT_INTERVAL_MS = 10_000; // save every 10 seconds
 const RESUME_THRESHOLD_S = 5;         // only prompt if > 5 seconds watched
 
 /**
  * useVideoProgress — attaches to a <video> DOM element.
- * - Sends a heartbeat every 10s to save playback position.
- * - Uses navigator.sendBeacon on tab close to save final position reliably.
+ * - Sends an authenticated heartbeat every 10s to save playback position.
+ * - Uses navigator.sendBeacon on tab close for best-effort final save.
  * - On mount, fetches saved progress and resolves a "resumeTime" for the player.
  *
  * @param {string} videoId  - MongoDB video _id
@@ -18,11 +18,18 @@ export function useVideoProgress(videoId, videoRef) {
   const resumeTimeRef = useRef(null);
   const intervalRef = useRef(null);
 
-  // Save progress helper
+  // Authenticated save — used for heartbeats (page is still alive)
   const persist = useCallback(() => {
     const el = videoRef.current;
     if (!el || !videoId || isNaN(el.currentTime)) return;
     saveProgress({ videoId, progressSeconds: Math.floor(el.currentTime) });
+  }, [videoId, videoRef]);
+
+  // Best-effort save via sendBeacon — used ONLY on beforeunload
+  const persistBeacon = useCallback(() => {
+    const el = videoRef.current;
+    if (!el || !videoId || isNaN(el.currentTime)) return;
+    saveProgressBeacon({ videoId, progressSeconds: Math.floor(el.currentTime) });
   }, [videoId, videoRef]);
 
   useEffect(() => {
@@ -35,18 +42,18 @@ export function useVideoProgress(videoId, videoRef) {
       }
     });
 
-    // Heartbeat: save every 10s while playing
+    // Heartbeat: save every 10s while playing (uses authenticated axios)
     intervalRef.current = setInterval(persist, HEARTBEAT_INTERVAL_MS);
 
-    // Save on page unload (e.g. tab closed, navigation)
-    const handleUnload = () => persist();
+    // Save on page unload via sendBeacon (fire-and-forget, best-effort)
+    const handleUnload = () => persistBeacon();
     window.addEventListener("beforeunload", handleUnload);
 
     return () => {
       clearInterval(intervalRef.current);
       window.removeEventListener("beforeunload", handleUnload);
     };
-  }, [videoId, persist]);
+  }, [videoId, persist, persistBeacon]);
 
   return { resumeTimeRef };
 }

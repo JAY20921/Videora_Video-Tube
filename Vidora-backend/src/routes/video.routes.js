@@ -3,6 +3,7 @@ import {
   deleteVideo,
   getAllVideos,
   getVideoById,
+  getVideoStatus,
   publishAVideo,
   togglePublishStatus,
   updateVideo,
@@ -15,13 +16,22 @@ import { validate, publishVideoSchema, updateVideoSchema } from "../middlewares/
 
 const router = Router();
 
-// Public: increment view count (no auth required)
+// ─── Public routes (no auth required) ─────────────────────────────────────────
+
+// Increment view count
 router.route("/view/:videoId").post(incrementVideoView);
 
-// Public: get all videos (browsing + search)
+// Get all videos (browsing + search)
 router.route("/").get(getAllVideos);
 
-router.use(verifyJWT); // All routes below require authentication
+// Get a single video by ID — public so anyone can watch
+router.route("/:videoId").get(getVideoById);
+
+// ─── Authenticated routes ─────────────────────────────────────────────────────
+router.use(verifyJWT);
+
+// Phase 3: Poll video processing status
+router.route("/status/:videoId").get(getVideoStatus);
 
 router.route("/toggle/publish/:videoId").patch(togglePublishStatus);
 
@@ -37,9 +47,9 @@ router
     publishAVideo
   );
 
+// Delete and update require auth — but GET is already handled above as public
 router
   .route("/:videoId")
-  .get(getVideoById)
   .delete(deleteVideo)
   .patch(upload.single("thumbnail"), validate(updateVideoSchema), updateVideo);
 

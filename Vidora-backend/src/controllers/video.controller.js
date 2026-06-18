@@ -6,6 +6,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { getVideoQueue } from "../queues/videoQueue.js";
+import { logger } from "../utils/logger.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy = "createdAt", sortType = "desc", userId } = req.query;
@@ -70,9 +72,10 @@ const publishAVideo = asyncHandler(async (req, res) => {
     if (!uploadedThumbnail?.url) throw new ApiError(500, "Error uploading thumbnail");
   }
 
-  // Fix: extract duration from Cloudinary response, not req.body
+  // Extract duration from Cloudinary response
   const duration = uploadedVideo.duration || 0;
 
+  // Phase 3: Mark video as "processing" — the worker will update to "ready" after HLS transcoding
   const newVideo = await Video.create({
     title: title.trim(),
     description: description.trim(),
@@ -80,13 +83,33 @@ const publishAVideo = asyncHandler(async (req, res) => {
     videoFile: uploadedVideo.url,
     thumbnail: uploadedThumbnail?.url || "",
     owner: req.user._id,
+    status: "processing",
   });
+
+  // Enqueue the video for HLS transcoding via BullMQ
+  try {
+    await getVideoQueue().add(
+      "transcode",
+      {
+        videoId: String(newVideo._id),
+        rawUrl: uploadedVideo.url,
+        title: title.trim(),
+      },
+      { jobId: `transcode-${newVideo._id}` }
+    );
+    logger.info({ videoId: newVideo._id }, "Video transcoding job enqueued");
+  } catch (queueError) {
+    // If Redis/queue is unavailable, fall back to "ready" with raw MP4
+    logger.warn({ err: queueError, videoId: newVideo._id }, "Queue unavailable — video set to ready with raw MP4");
+    newVideo.status = "ready";
+    await newVideo.save();
+  }
 
   const created = await Video.findById(newVideo._id)
     .populate({ path: "owner", select: "fullName username avatar" })
     .select("-__v");
 
-  return res.status(201).json(new ApiResponse(201, created, "Video published successfully"));
+  return res.status(201).json(new ApiResponse(201, created, "Video published — processing will complete shortly"));
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
@@ -198,10 +221,32 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     );
 });
 
+/**
+ * GET /api/v1/videos/status/:videoId
+ * Returns the current processing status of a video.
+ * Used by the frontend to poll until transcoding is complete.
+ */
+const getVideoStatus = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+  if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId");
+
+  const video = await Video.findById(videoId).select("status hlsUrl videoFile").lean();
+  if (!video) throw new ApiError(404, "Video not found");
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      status: video.status,
+      hlsUrl: video.hlsUrl || "",
+      videoFile: video.videoFile,
+    }, "Video status fetched")
+  );
+});
+
 export {
   getAllVideos,
   publishAVideo,
   getVideoById,
+  getVideoStatus,
   incrementVideoView,
   updateVideo,
   deleteVideo,

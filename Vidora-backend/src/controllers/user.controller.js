@@ -12,7 +12,9 @@ import mongoose from "mongoose";
 const cookieDefaults = {
   httpOnly: true,
   secure: config.isProduction,
-  sameSite: "strict",
+  // "lax" in development — frontend (port 5173) and backend (port 8000) are cross-origin,
+  // so "strict" would block cookies entirely. "strict" in production where they share an origin.
+  sameSite: config.isProduction ? "strict" : "lax",
 };
 
 const accessTokenCookieOptions = {

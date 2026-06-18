@@ -11,10 +11,11 @@ router.use(verifyJWT);
 // Save / upsert progress (called on heartbeat)
 router.route("/").post(generalLimiter, saveProgress);
 
+// Get paginated watch history (for "Continue Watching" section)
+// MUST be registered BEFORE /:videoId — otherwise Express matches "history" as a videoId param
+router.route("/history").get(getWatchHistory);
+
 // Get progress for a specific video (called on VideoPage load)
 router.route("/:videoId").get(getProgress);
-
-// Get paginated watch history (for "Continue Watching" section)
-router.route("/history").get(getWatchHistory);
 
 export default router;

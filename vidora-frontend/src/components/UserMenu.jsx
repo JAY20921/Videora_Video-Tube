@@ -39,9 +39,44 @@ export default function UserMenu() {
           </div>
 
           <div className="flex flex-col p-2">
-            <button onClick={() => navigate(`/profile/${user.username}`)} className="text-left px-2 py-2 rounded hover:bg-neutral-800">Profile</button>
-            <button onClick={() => { handleLogout(); navigate('/login'); }} className="text-left px-2 py-2 rounded hover:bg-neutral-800">Logout</button>
-            <button onClick={() => { handleLogout(); navigate('/login'); }} className="text-left px-2 py-2 rounded hover:bg-neutral-800">Switch user</button>
+            <button
+              onClick={() => { setOpen(false); navigate(`/profile/${user.username}`); }}
+              className="text-left px-2 py-2 rounded hover:bg-neutral-800"
+            >
+              Profile
+            </button>
+            <button
+              onClick={() => { setOpen(false); navigate("/upload"); }}
+              className="text-left px-2 py-2 rounded hover:bg-neutral-800"
+            >
+              Upload Video
+            </button>
+
+            <div className="border-t border-neutral-800 my-1" />
+
+            {/* Switch user: log out silently, land on login page */}
+            <button
+              onClick={async () => {
+                setOpen(false);
+                await handleLogout();
+                navigate("/login");
+              }}
+              className="text-left px-2 py-2 rounded hover:bg-neutral-800 text-blue-400"
+            >
+              Switch Account
+            </button>
+
+            {/* Full logout */}
+            <button
+              onClick={async () => {
+                setOpen(false);
+                await handleLogout();
+                navigate("/login");
+              }}
+              className="text-left px-2 py-2 rounded hover:bg-neutral-800 text-rose-400"
+            >
+              Log out
+            </button>
           </div>
         </motion.div>
       )}

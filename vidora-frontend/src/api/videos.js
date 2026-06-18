@@ -1,5 +1,5 @@
 // src/api/videos.js
-import axios from "./axiosInstance";
+import axios from "./client";
 
 // ✅ Get ALL videos
 export const getAllVideos = async () => {
@@ -50,7 +50,6 @@ export const fetchVideos = async ({ limit = 24, userId } = {}) => {
 // ✅ Get single video
 export const getVideoById = async (id) => {
   const res = await axios.get(`/videos/${id}`);
-  console.log("getVideoById response:", res.data);
   return res.data;
 };
 
@@ -58,7 +57,7 @@ export const getVideoById = async (id) => {
 export const incrementView = async (id) => {
   if (!id) return null;
   try {
-    const res = await axios.post(`/videos/${id}/view`);
+    const res = await axios.post(`/videos/view/${id}`);
     return res.data;
   } catch (e) {
     // ignore errors - view counting is best-effort
@@ -89,6 +88,12 @@ export const uploadVideo = async (formData, onUploadProgress, { signal } = {}) =
 
 // Like video
 export const likeVideo = async (id) => {
-  const res = await axios.post(`/videos/${id}/like`);
+  const res = await axios.post(`/likes/toggle/v/${id}`);
   return res.data;
+};
+
+// Phase 3: Poll video processing status
+export const getVideoStatus = async (id) => {
+  const res = await axios.get(`/videos/status/${id}`);
+  return res.data?.data ?? { status: "ready" };
 };

@@ -31,6 +31,25 @@ const videoSchema = new Schema(
       type: Boolean,
       default: true,
     },
+    /**
+     * Phase 3: Processing pipeline status.
+     * - "ready"      — playable (raw MP4 or HLS transcoded)
+     * - "processing"  — FFmpeg transcoding in progress
+     * - "failed"      — transcoding failed after all retries
+     */
+    status: {
+      type: String,
+      enum: ["processing", "ready", "failed"],
+      default: "ready",
+    },
+    /**
+     * Phase 3: Master HLS playlist URL (.m3u8).
+     * Empty string for legacy MP4-only videos.
+     */
+    hlsUrl: {
+      type: String,
+      default: "",
+    },
     owner: {
       type: Schema.Types.ObjectId,
       ref: "User",
