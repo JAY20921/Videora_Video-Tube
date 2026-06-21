@@ -30,7 +30,7 @@ export default function SideNav() {
   const { user } = useAuth();
 
   return (
-    <aside className="w-60 hidden md:flex flex-col bg-neutral-950 border-r border-neutral-800 min-h-screen p-3 sticky top-0">
+    <aside className="w-60 hidden md:flex flex-col bg-neutral-950 border-r border-neutral-800 h-screen overflow-y-auto p-3 sticky top-0">
       {/* Logo */}
       <div className="mb-6 flex items-center gap-3 px-2 pt-1">
         <div className="w-10 h-10 rounded-lg bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center text-white font-bold shadow-lg">

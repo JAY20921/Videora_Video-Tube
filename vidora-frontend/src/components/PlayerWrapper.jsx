@@ -13,7 +13,7 @@ import { getVideoStatus } from "../api/videos";
  * - Processing status polling (shows loader while transcoding)
  * - Resume prompt from watch history
  */
-export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatus: initialStatus }) {
+export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatus: initialStatus, spritesheetUrl }) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const hlsRef = useRef(null);
@@ -25,6 +25,14 @@ export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatu
   const [error, setError] = useState(null);
   const [showResume, setShowResume] = useState(false);
   const [resumeSeconds, setResumeSeconds] = useState(0);
+  
+  // Phase 4: Hover thumbnails state
+  const [hoverX, setHoverX] = useState(null);
+  const [hoverTime, setHoverTime] = useState(null);
+
+  // Phase 4: Idle state for premium SaaS player
+  const [isIdle, setIsIdle] = useState(false);
+  const idleTimeout = useRef(null);
 
   // Phase 3: Quality selector state
   const [qualities, setQualities] = useState([]);
@@ -37,6 +45,37 @@ export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatu
 
   // Attach heartbeat + get resume time
   const { resumeTimeRef } = useVideoProgress(videoId, videoRef);
+
+  // Phase 4: Idle tracking
+  useEffect(() => {
+    const handleMouseMove = () => {
+      setIsIdle(false);
+      if (idleTimeout.current) clearTimeout(idleTimeout.current);
+      if (isPlaying) {
+        idleTimeout.current = setTimeout(() => setIsIdle(true), 2500);
+      }
+    };
+
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("mousemove", handleMouseMove);
+      container.addEventListener("mouseleave", () => {
+        if (isPlaying) setIsIdle(true);
+      });
+    }
+
+    if (isPlaying) {
+      handleMouseMove();
+    } else {
+      setIsIdle(false);
+      if (idleTimeout.current) clearTimeout(idleTimeout.current);
+    }
+
+    return () => {
+      if (container) container.removeEventListener("mousemove", handleMouseMove);
+      if (idleTimeout.current) clearTimeout(idleTimeout.current);
+    };
+  }, [isPlaying]);
 
   // Phase 3: Poll for processing completion
   useEffect(() => {
@@ -179,6 +218,29 @@ export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatu
     videoRef.current.currentTime = Number(e.target.value);
   };
 
+  const handleProgressMouseMove = (e) => {
+    const rect = e.target.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const percent = x / rect.width;
+    setHoverX(x);
+    setHoverTime(percent * duration);
+  };
+
+  const getSpriteStyle = () => {
+    if (!spritesheetUrl || hoverTime === null) return {};
+    const frameIndex = Math.floor(hoverTime / 10);
+    // 10x10 tile grid, 160px width
+    const row = Math.floor(frameIndex / 10);
+    const col = frameIndex % 10;
+    return {
+      backgroundImage: `url(${spritesheetUrl})`,
+      backgroundPosition: `-${col * 160}px -${row * 90}px`,
+      backgroundSize: '1600px', // 10 cols * 160
+      width: '160px',
+      height: '90px',
+    };
+  };
+
   const toggleFullscreen = () => {
     const el = containerRef.current;
     if (!document.fullscreenElement) el.requestFullscreen();
@@ -238,13 +300,33 @@ export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatu
       <video
         ref={videoRef}
         poster={poster}
-        className="absolute inset-0 w-full h-full object-contain"
+        className="absolute inset-0 w-full h-full object-contain cursor-pointer"
         playsInline
+        onClick={togglePlay}
+        onDoubleClick={(e) => {
+          const rect = e.target.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          if (x > rect.width / 2) {
+            videoRef.current.currentTime += 10;
+          } else {
+            videoRef.current.currentTime -= 10;
+          }
+        }}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => setDuration(e.target.duration)}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />
+
+      {/* Big Play Button Overlay */}
+      {!isPlaying && status === "ready" && !error && !showResume && (
+        <button 
+          onClick={togglePlay} 
+          className="absolute inset-0 m-auto w-20 h-20 flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-full text-white/90 hover:bg-rose-500 hover:scale-110 hover:text-white transition-all duration-300 z-10 shadow-2xl border border-white/10"
+        >
+          <Play size={36} fill="currentColor" className="ml-1.5" />
+        </button>
+      )}
 
       {/* Resume prompt */}
       {showResume && (
@@ -272,103 +354,139 @@ export default function PlayerWrapper({ videoId, url, hlsUrl, poster, videoStatu
         </div>
       )}
 
-      {/* Seek bar */}
-      <input
-        type="range"
-        min="0"
-        max={duration || 1}
-        value={progress}
-        onChange={onSeek}
-        className="absolute bottom-14 left-0 right-0 w-full accent-rose-500 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
-      />
-
-      {/* Controls */}
-      <div className="absolute bottom-0 left-0 right-0 px-4 py-3 bg-gradient-to-t from-black/90 to-transparent flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={togglePlay}
-            className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white"
+      {/* Controls Container */}
+      <div 
+        className={`absolute bottom-0 left-0 right-0 pt-24 pb-3 px-4 bg-gradient-to-t from-black/95 via-black/40 to-transparent flex flex-col justify-end transition-opacity duration-300 ${
+          isIdle ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        {/* Thumbnail hover preview */}
+        {hoverTime !== null && (
+          <div 
+            className="absolute bottom-16 z-20 pointer-events-none flex flex-col items-center drop-shadow-2xl transition-all"
+            style={{ 
+              left: hoverX + 'px', 
+              transform: 'translateX(-50%)',
+              marginLeft: hoverX < 80 ? `${80 - hoverX}px` : hoverX > (containerRef.current?.clientWidth - 80) ? `-${hoverX - (containerRef.current?.clientWidth - 80)}px` : '0px'
+            }}
           >
-            {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-          </button>
-          <span className="text-xs text-neutral-300">
-            {formatTime(progress)} / {formatTime(duration)}
-          </span>
+            {spritesheetUrl && <div className="border-[1.5px] border-white/30 bg-black rounded overflow-hidden shadow-2xl" style={getSpriteStyle()} />}
+            <div className="text-[12px] bg-black/80 backdrop-blur px-2.5 py-0.5 rounded shadow-lg mt-1.5 font-semibold text-white tracking-wide">
+              {formatTime(hoverTime)}
+            </div>
+          </div>
+        )}
+
+        {/* Seek bar */}
+        <div className="relative w-full h-1.5 group/slider mb-4 flex items-center cursor-pointer">
+          <input
+            type="range"
+            min="0"
+            max={duration || 1}
+            value={progress}
+            onChange={onSeek}
+            onMouseMove={handleProgressMouseMove}
+            onMouseLeave={() => setHoverTime(null)}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+          />
+          <div className="w-full h-1 bg-white/30 rounded-full overflow-hidden group-hover/slider:h-1.5 transition-all pointer-events-none">
+            <div 
+              className="h-full bg-rose-500"
+              style={{ width: `${duration > 0 ? (progress / duration) * 100 : 0}%` }}
+            />
+          </div>
+          <div 
+            className="absolute h-3.5 w-3.5 bg-rose-500 rounded-full scale-0 group-hover/slider:scale-100 transition-transform pointer-events-none z-10 shadow-lg"
+            style={{ left: `calc(${duration > 0 ? (progress / duration) * 100 : 0}% - 7px)` }}
+          />
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Playback speed */}
-          <Gauge size={16} className="text-white" />
-          <select
-            value={playbackRate}
-            onChange={(e) => {
-              videoRef.current.playbackRate = Number(e.target.value);
-              setPlaybackRate(Number(e.target.value));
-            }}
-            className="bg-black/60 text-white text-xs rounded px-2 py-1"
-          >
-            {[0.5, 1, 1.25, 1.5, 2].map((r) => (
-              <option key={r} value={r}>{r}×</option>
-            ))}
-          </select>
+        {/* Buttons Row */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={togglePlay}
+              className="hover:scale-110 hover:text-rose-400 transition text-white drop-shadow"
+            >
+              {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
+            </button>
+            <span className="text-xs text-white/90 drop-shadow font-medium tracking-wide">
+              {formatTime(progress)} <span className="text-white/50 mx-1">/</span> {formatTime(duration)}
+            </span>
+          </div>
 
-          {/* Phase 3: Quality selector (only for HLS) */}
-          {qualities.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setShowQualityMenu((s) => !s)}
-                className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white flex items-center gap-1"
-                title="Video quality"
+          <div className="flex items-center gap-5 text-white">
+            {/* Playback speed */}
+            <div className="relative group/speed flex items-center">
+              <Gauge size={18} className="drop-shadow cursor-pointer hover:text-rose-400 transition" />
+              <select
+                value={playbackRate}
+                onChange={(e) => {
+                  videoRef.current.playbackRate = Number(e.target.value);
+                  setPlaybackRate(Number(e.target.value));
+                }}
+                className="absolute opacity-0 inset-0 cursor-pointer"
               >
-                <Settings size={16} />
-                <span className="text-xs">
-                  {currentQuality === -1 ? "Auto" : qualities.find(q => q.index === currentQuality)?.label || "Auto"}
-                </span>
-              </button>
+                {[0.5, 1, 1.25, 1.5, 2].map((r) => (
+                  <option key={r} value={r}>{r}×</option>
+                ))}
+              </select>
+            </div>
 
-              {showQualityMenu && (
-                <div className="absolute bottom-full mb-2 right-0 bg-neutral-900 border border-neutral-700 rounded-lg shadow-xl overflow-hidden min-w-[120px] z-20">
-                  <button
-                    onClick={() => handleQualityChange(-1)}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 transition ${
-                      currentQuality === -1 ? "text-rose-400 font-semibold" : "text-white"
-                    }`}
-                  >
-                    Auto
-                  </button>
-                  {qualities.map((q) => (
+            {/* Phase 3: Quality selector (only for HLS) */}
+            {qualities.length > 0 && (
+              <div className="relative flex items-center">
+                <button
+                  onClick={() => setShowQualityMenu((s) => !s)}
+                  className="hover:scale-110 hover:text-rose-400 transition drop-shadow"
+                  title="Video quality"
+                >
+                  <Settings size={18} />
+                </button>
+
+                {showQualityMenu && (
+                  <div className="absolute bottom-full mb-3 right-0 bg-black/90 backdrop-blur-md border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[140px] z-20">
                     <button
-                      key={q.index}
-                      onClick={() => handleQualityChange(q.index)}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-neutral-800 transition ${
-                        currentQuality === q.index ? "text-rose-400 font-semibold" : "text-white"
+                      onClick={() => handleQualityChange(-1)}
+                      className={`w-full text-left px-4 py-2.5 text-xs hover:bg-white/10 transition ${
+                        currentQuality === -1 ? "text-rose-400 font-bold bg-white/5" : "text-white"
                       }`}
                     >
-                      {q.label}
-                      <span className="text-neutral-500 ml-2">
-                        {Math.round(q.bitrate / 1000)}kbps
-                      </span>
+                      Auto
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                    {qualities.map((q) => (
+                      <button
+                        key={q.index}
+                        onClick={() => handleQualityChange(q.index)}
+                        className={`w-full text-left px-4 py-2.5 text-xs hover:bg-white/10 transition ${
+                          currentQuality === q.index ? "text-rose-400 font-bold bg-white/5" : "text-white"
+                        }`}
+                      >
+                        {q.label}
+                        <span className="text-neutral-500 ml-2 font-medium">
+                          {Math.round(q.bitrate / 1000)}kbps
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={togglePiP}
-            className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white"
-          >
-            <PictureInPicture2 size={16} />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            className="bg-black/60 hover:bg-white/15 transition p-1.5 rounded-full text-white"
-          >
-            <Maximize size={16} />
-          </button>
+            {/* Fullscreen & PiP */}
+            <button
+              onClick={togglePiP}
+              className="hover:scale-110 hover:text-rose-400 transition drop-shadow"
+            >
+              <PictureInPicture2 size={18} />
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="hover:scale-110 hover:text-rose-400 transition drop-shadow"
+            >
+              <Maximize size={18} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

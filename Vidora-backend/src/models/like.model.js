@@ -22,9 +22,18 @@ const likeSchema = new Schema(
   { timestamps: true }
 );
 
-// Prevents a user from liking the same video/comment twice
-likeSchema.index({ video: 1, likedBy: 1 }, { unique: true, sparse: true });
-likeSchema.index({ comment: 1, likedBy: 1 }, { unique: true, sparse: true });
-likeSchema.index({ tweet: 1, likedBy: 1 }, { unique: true, sparse: true });
+// Prevents a user from liking the same item twice, ignoring null fields
+likeSchema.index(
+  { video: 1, likedBy: 1 },
+  { unique: true, partialFilterExpression: { video: { $exists: true, $type: "objectId" } } }
+);
+likeSchema.index(
+  { comment: 1, likedBy: 1 },
+  { unique: true, partialFilterExpression: { comment: { $exists: true, $type: "objectId" } } }
+);
+likeSchema.index(
+  { tweet: 1, likedBy: 1 },
+  { unique: true, partialFilterExpression: { tweet: { $exists: true, $type: "objectId" } } }
+);
 
 export const Like = mongoose.model("Like", likeSchema);

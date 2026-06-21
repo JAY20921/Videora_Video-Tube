@@ -14,6 +14,7 @@ const VideoPage     = lazy(() => import("./pages/VideoPage"));
 const Upload        = lazy(() => import("./pages/Upload"));
 const Login         = lazy(() => import("./pages/Login"));
 const Register      = lazy(() => import("./pages/Register"));
+const Landing       = lazy(() => import("./pages/Landing"));
 const Dashboard     = lazy(() => import("./pages/Dashboard"));
 const LikedVideos   = lazy(() => import("./pages/LikedVideos"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
@@ -52,40 +53,13 @@ export default function App() {
   // ─── Unauthenticated shell ────────────────────────────────────────────────
   if (!user) {
     return (
-      <div className="min-h-screen bg-neutral-950 text-gray-100 flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-neutral-950 text-gray-100 flex flex-col">
         <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login"    element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route
-                path="*"
-                element={
-                  <div className="text-center space-y-6">
-                    <div className="w-16 h-16 mx-auto rounded-xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center text-white font-bold text-2xl shadow-xl">
-                      V
-                    </div>
-                    <h1 className="text-3xl font-bold">Welcome to Vidora</h1>
-                    <p className="text-neutral-400 max-w-md mx-auto">
-                      Stream, share, and discover amazing videos from creators around the world.
-                    </p>
-                    <div className="flex gap-4 justify-center">
-                      <Link
-                        to="/login"
-                        className="bg-rose-600 px-7 py-2.5 rounded-full hover:bg-rose-700 transition font-medium shadow-lg shadow-rose-500/20"
-                      >
-                        Sign in
-                      </Link>
-                      <Link
-                        to="/register"
-                        className="bg-neutral-800 border border-neutral-700 px-7 py-2.5 rounded-full hover:bg-neutral-700 transition font-medium"
-                      >
-                        Create account
-                      </Link>
-                    </div>
-                  </div>
-                }
-              />
+              <Route path="*" element={<Landing />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>

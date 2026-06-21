@@ -9,6 +9,7 @@ import { logger } from "../utils/logger.js";
 const redisConfig = {
   host: process.env.REDIS_HOST || "127.0.0.1",
   port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+  username: process.env.REDIS_USERNAME || "default",
   password: process.env.REDIS_PASSWORD || undefined,
   maxRetriesPerRequest: null, // Required by BullMQ
 };

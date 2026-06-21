@@ -2,6 +2,8 @@ import mongoose, { isValidObjectId } from "mongoose";
 import { Video } from "../models/video.model.js";
 import { User } from "../models/user.model.js";
 import { WatchHistory } from "../models/watchHistory.model.js";
+import { Subscription } from "../models/subscription.model.js";
+import { Like } from "../models/like.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
@@ -86,17 +88,24 @@ const publishAVideo = asyncHandler(async (req, res) => {
     status: "processing",
   });
 
-  // Enqueue the video for HLS transcoding via BullMQ
+  // Enqueue the video for HLS transcoding via BullMQ with a 2-second timeout
   try {
-    await getVideoQueue().add(
+    const enqueuePromise = getVideoQueue().add(
       "transcode",
       {
         videoId: String(newVideo._id),
         rawUrl: uploadedVideo.url,
         title: title.trim(),
+        duration: Math.round(duration)
       },
       { jobId: `transcode-${newVideo._id}` }
     );
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Redis connection timeout")), 2000)
+    );
+
+    await Promise.race([enqueuePromise, timeoutPromise]);
     logger.info({ videoId: newVideo._id }, "Video transcoding job enqueued");
   } catch (queueError) {
     // If Redis/queue is unavailable, fall back to "ready" with raw MP4
@@ -121,6 +130,35 @@ const getVideoById = asyncHandler(async (req, res) => {
     .lean();
 
   if (!video) throw new ApiError(404, "Video not found");
+
+  // Fetch subscribers count
+  const subscribersCount = await Subscription.countDocuments({ channel: video.owner._id });
+  video.subscribersCount = subscribersCount;
+
+  // Fetch if current user is subscribed
+  if (req.user?._id) {
+    const isSubscribed = await Subscription.exists({
+      subscriber: req.user._id,
+      channel: video.owner._id
+    });
+    video.isSubscribed = !!isSubscribed;
+  } else {
+    video.isSubscribed = false;
+  }
+
+  // Fetch likes count and if current user liked it
+  const likesCount = await Like.countDocuments({ video: videoId });
+  video.likesCount = likesCount;
+
+  if (req.user?._id) {
+    const isLiked = await Like.exists({
+      video: videoId,
+      likedBy: req.user._id
+    });
+    video.isLiked = !!isLiked;
+  } else {
+    video.isLiked = false;
+  }
 
   return res.status(200).json(new ApiResponse(200, video, "Video fetched successfully"));
 });

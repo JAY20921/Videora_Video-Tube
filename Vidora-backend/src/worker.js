@@ -28,6 +28,7 @@ import { createWriteStream } from "fs";
 import path from "path";
 import https from "https";
 import http from "http";
+import ffmpeg from "ffmpeg-static";
 
 const execAsync = promisify(exec);
 
@@ -93,7 +94,7 @@ function buildFFmpegCommand(inputPath, outputDir) {
   const varStreams = PROFILES.map((_, i) => `v:${i},a:${i}`).join(" ");
 
   const cmd = [
-    `ffmpeg -i "${inputPath}" -y`,
+    `"${ffmpeg}" -i "${inputPath}" -y`,
     ...maps,
     ...streams,
     `-f hls`,
@@ -136,6 +137,25 @@ async function processVideoJob(job) {
     logger.info({ videoId }, "Running FFmpeg transcoding...");
     const ffmpegCmd = buildFFmpegCommand(inputPath, hlsDir);
     await execAsync(ffmpegCmd, { maxBuffer: 50 * 1024 * 1024 }); // 50MB stdout buffer
+    job.updateProgress(60);
+
+    // 4.5 Generate Spritesheet for hover thumbnails
+    logger.info({ videoId }, "Generating spritesheet...");
+    const spritePath = path.join(jobDir, "sprite.jpg");
+    // Extract 1 frame every 10s, scale width to 160px, tile up to 10x10 (max 100 frames = 1000s)
+    const spriteCmd = `"${ffmpeg}" -i "${inputPath}" -vf "fps=1/10,scale=160:-1,tile=10x10" -frames:v 1 -y "${spritePath}"`;
+    await execAsync(spriteCmd).catch(e => logger.warn("Spritesheet generation failed: " + e.message));
+
+    let spritesheetUrl = "";
+    try {
+      const stat = await fs.stat(spritePath);
+      if (stat.isFile()) {
+        const uploadedSprite = await uploadOnCloudinary(spritePath, `sprites/${videoId}`);
+        if (uploadedSprite?.url) spritesheetUrl = uploadedSprite.url;
+      }
+    } catch {
+      // ignore if sprite wasn't created
+    }
     job.updateProgress(70);
 
     // 5. Upload all HLS files to Cloudinary
@@ -162,6 +182,7 @@ async function processVideoJob(job) {
     await Video.findByIdAndUpdate(videoId, {
       status: "ready",
       hlsUrl: masterUrl,
+      spritesheetUrl: spritesheetUrl,
     });
     job.updateProgress(100);
 

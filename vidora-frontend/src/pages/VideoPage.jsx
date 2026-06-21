@@ -65,6 +65,7 @@ export default function VideoPage() {
           videoId={video._id}
           url={video.videoFile || video.fileUrl || video.videoUrl}
           hlsUrl={video.hlsUrl || ""}
+          spritesheetUrl={video.spritesheetUrl || ""}
           poster={video.thumbnailUrl || video.thumbnail}
           videoStatus={video.status || "ready"}
         />

@@ -33,4 +33,9 @@ export const config = {
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
+
+  meilisearch: {
+    host: process.env.MEILI_HOST || "http://localhost:7700",
+    apiKey: process.env.MEILI_MASTER_KEY || "",
+  },
 };

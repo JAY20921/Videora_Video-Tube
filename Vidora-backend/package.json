@@ -22,6 +22,7 @@
     "prettier": "^3.6.2"
   },
   "dependencies": {
+    "@qdrant/js-client-rest": "^1.18.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.79.0",
     "cloudinary": "^2.8.0",
@@ -31,12 +32,15 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-rate-limit": "^8.5.2",
+    "ffmpeg-static": "^5.3.0",
     "helmet": "^8.2.0",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.2",
+    "meilisearch": "^0.58.0",
     "mongoose": "^8.19.2",
     "mongoose-aggregate-paginate-v2": "^1.1.4",
     "multer": "^2.0.2",
+    "openai": "^6.44.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "serve": "^14.2.5",

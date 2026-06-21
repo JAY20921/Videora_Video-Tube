@@ -9,7 +9,7 @@ import {
   updateVideo,
   incrementVideoView,
 } from "../controllers/video.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { uploadLimiter } from "../middlewares/rateLimiter.middleware.js";
 import { validate, publishVideoSchema, updateVideoSchema } from "../middlewares/validate.middleware.js";
@@ -24,8 +24,8 @@ router.route("/view/:videoId").post(incrementVideoView);
 // Get all videos (browsing + search)
 router.route("/").get(getAllVideos);
 
-// Get a single video by ID — public so anyone can watch
-router.route("/:videoId").get(getVideoById);
+// Get a single video by ID — public so anyone can watch, but optional auth for sub status
+router.route("/:videoId").get(optionalVerifyJWT, getVideoById);
 
 // ─── Authenticated routes ─────────────────────────────────────────────────────
 router.use(verifyJWT);
