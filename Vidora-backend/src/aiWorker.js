@@ -217,6 +217,15 @@ async function start() {
   await mongoose.connect(`${mongoUri}/videotube`);
   logger.info("AI Worker connected to MongoDB (videotube)");
 
+  // Render Free Tier Hack: Bind to a port so Render thinks this is a valid Web Service
+  const port = process.env.PORT || 8082; // using 8082 to avoid conflict with main API if run locally
+  http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end("AI Worker is running");
+  }).listen(port, () => {
+    logger.info(`Dummy HTTP server listening on port ${port} (Render Free Tier bypass)`);
+  });
+
   // Ensure Qdrant collection exists
   await ensureCollection();
 
