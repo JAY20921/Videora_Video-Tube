@@ -3,6 +3,7 @@ import { Routes, Route, Link, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import { motion } from "framer-motion";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Analytics } from "@vercel/analytics/react";
 import "./index.css";
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
@@ -63,6 +64,7 @@ export default function App() {
             </Routes>
           </Suspense>
         </ErrorBoundary>
+        <Analytics />
       </div>
     );
   }
@@ -108,6 +110,7 @@ export default function App() {
           </motion.div>
         </main>
       </div>
+      <Analytics />
     </div>
   );
 }
