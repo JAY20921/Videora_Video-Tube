@@ -94,6 +94,8 @@ function buildFFmpegCommand(inputPath, outputDir) {
 
   const cmd = [
     `"${ffmpeg}" -i "${inputPath}" -y`,
+    `-threads 1`,
+    `-max_muxing_queue_size 1024`,
     ...maps,
     ...streams,
     `-f hls`,
