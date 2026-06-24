@@ -1,90 +1,138 @@
-# 🎬 Videora - VideoTube
-> **Broadcast Your World.** > A next-generation video sharing platform built for creators and viewers alike.
+# Vidora Video Tube 🎬
 
-[![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](https://videora-video-tube.vercel.app)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MERN Stack](https://img.shields.io/badge/Stack-MERN-blueviolet)](https://www.mongodb.com/mern-stack)
+A production-grade, AI-powered video streaming platform built with the MERN stack.
 
 ---
 
-## 📖 Table of Contents
-- [About the Project](#-about-the-project)
-- [Key Features](#-key-features)
-- [Tech Stack](#-tech-stack)
-- [Project Architecture](#-project-architecture)
-- [Code Walkthrough](#-code-walkthrough)
-- [Getting Started](#-getting-started)
-- [Future Upgrades](#-future-upgrades)
-- [Contact](#-contact)
+## Architecture Overview
+
+```
+vidora-frontend/          React + Vite + Tailwind CSS
+Vidora-backend/           Node.js + Express + MongoDB + Cloudinary
+```
 
 ---
 
-## 🌟 About the Project
+## Prerequisites
 
-**Videora** is a fully functional video hosting and streaming application designed to replicate the core experience of major platforms like YouTube. It allows users to join a community, upload their own content, and engage with videos through likes and comments.
-
-The project is split into two distinct parts:
-1.  **Vidora-backend**: A robust RESTful API that handles data, authentication, and file management.
-2.  **vidora-frontend**: A dynamic, responsive React application that delivers a smooth user interface.
+- **Node.js** ≥ 18
+- **MongoDB Atlas** account (free M0 tier works)
+- **Cloudinary** account (free tier)
 
 ---
 
-## 🚀 Key Features
+## Quick Start
 
-### 👤 User Experience
-* **Secure Authentication**: JWT-based Sign Up and Login system to keep user accounts safe.
-* **User Profiles**: Customizable channel pages with avatar and cover image uploads.
-* **Subscriptions**: Subscribe to favorite creators and manage your feed.
+### 1. Clone and install
 
-### 📹 Video Management
-* **Seamless Uploads**: Drag-and-drop video uploading with progress indicators.
-* **Video Playback**: Custom video player with play/pause, volume control, and fullscreen modes.
-* **Dashboard**: A studio dashboard to manage uploaded content.
+```bash
+git clone https://github.com/your-username/Vidora-Video-Tube.git
+cd Vidora-Video-Tube
 
-### 💬 Engagement
-* **Like & Dislike**: Real-time interaction stats on every video.
-* **Comments System**: Threaded discussions under videos to foster community.
-* **Search & Filter**: Find videos by title, tags, or categories instantly.
+# Backend
+cd Vidora-backend
+npm install
+
+# Frontend
+cd ../vidora-frontend
+npm install
+```
+
+### 2. Configure environment
+
+```bash
+cd Vidora-backend
+cp .env.example .env
+# Edit .env with your real values (see reference below)
+```
+
+### 3. Run locally
+
+```bash
+# Terminal 1 — Backend (port 8000)
+cd Vidora-backend && npm run dev
+
+# Terminal 2 — Frontend (port 5173)
+cd vidora-frontend && npm run dev
+```
 
 ---
 
-## 🛠 Tech Stack
+## Environment Variable Reference
 
-### **Frontend (Client-Side)**
-* **React.js**: For building the component-based UI.
-* **Redux / Context API**: For global state management (User auth status, video data).
-* **Tailwind CSS**: For modern, responsive styling.
-* **Axios**: For making HTTP requests to the backend.
+| Variable | Required | Example | Description |
+|----------|----------|---------|-------------|
+| `MONGODB_URI` | ✅ | `mongodb+srv://...` | MongoDB Atlas connection string |
+| `PORT` | ✅ | `8000` | Express server port |
+| `NODE_ENV` | ✅ | `development` | `development` or `production` |
+| `CORS_ORIGIN` | ✅ | `http://localhost:5173` | Comma-separated allowed origins |
+| `ACCESS_TOKEN_SECRET` | ✅ | `32+ char random string` | JWT signing secret |
+| `ACCESS_TOKEN_EXPIRY` | ✅ | `15m` | Token expiry (industry standard: 15 min) |
+| `REFRESH_TOKEN_SECRET` | ✅ | `32+ char random string` | Refresh JWT secret (different from access!) |
+| `REFRESH_TOKEN_EXPIRY` | ✅ | `7d` | Refresh token expiry |
+| `CLOUDINARY_CLOUD_NAME` | ✅ | `dfbfs6caq` | From Cloudinary dashboard |
+| `CLOUDINARY_API_KEY` | ✅ | `894461...` | From Cloudinary dashboard |
+| `CLOUDINARY_API_SECRET` | ✅ | `4yI2N-...` | From Cloudinary dashboard |
 
-### **Backend (Server-Side)**
-* **Node.js & Express.js**: The backbone of the API.
-* **MongoDB & Mongoose**: NoSQL database for flexible data modeling (Users, Videos, Comments).
-* **JWT (JSON Web Tokens)**: For stateless authentication.
-* **Multer**: For handling file uploads (Videos/Images).
-* **Cloudinary** : Cloud storage for media assets.
+> ⚠️ **Never commit `.env`**. It is in `.gitignore`. Use `.env.example` as a template only.
 
 ---
 
-## 🏗 Project Architecture
+## API Endpoints
 
-Here is how the project codebase is organized:
+### Auth (`/api/v1/users`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/register` | — | Register (multipart/form-data, avatar required) |
+| POST | `/login` | — | Login |
+| POST | `/logout` | JWT | Logout |
+| GET | `/current-user` | JWT | Get authenticated user |
+| POST | `/refresh-token` | — | Refresh access token |
 
-```text
-Videora_Video-Tube/
-├── 📂 Vidora-backend/         # Server-side logic
-│   ├── 📂 controllers/        # Logic for handling requests (e.g., video.controller.js)
-│   ├── 📂 models/             # Database schemas (User.js, Video.js)
-│   ├── 📂 routes/             # API endpoints (auth.routes.js, video.routes.js)
-│   ├── 📂 utils/              # Helper functions (Cloudinary upload, Error handling)
-│   ├── 📂 middlewares/        # Auth verification (multer, jwtVerify)
-│   ├── app.js                 # Express app configuration
-│   └── index.js               # Server entry point
-│
-└── 📂 vidora-frontend/        # Client-side application
-    ├── 📂 src/
-    │   ├── 📂 components/     # Reusable UI (Header, VideoCard, Sidebar)
-    │   ├── 📂 pages/          # Full pages (Home, VideoDetail, Login)
-    │   ├── 📂 store/          # State management (Redux slices)
-    │   └── main.jsx           # React entry point
-    └── package.json           # Frontend dependencies
+### Videos (`/api/v1/videos`)
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/` | — | Browse / search videos |
+| POST | `/` | JWT | Upload video (rate limited: 5/hr) |
+| GET | `/:videoId` | — | Get video by ID |
+| PATCH | `/:videoId` | JWT (owner) | Update video |
+| DELETE | `/:videoId` | JWT (owner) | Delete video |
+| PATCH | `/toggle/publish/:videoId` | JWT (owner) | Toggle publish status |
+| POST | `/view/:videoId` | — | Increment view count |
 
+---
+
+## Rate Limits
+
+| Scope | Limit |
+|-------|-------|
+| Auth (login/register) | 10 requests / 15 minutes |
+| Upload | 5 uploads / hour |
+| General API | 100 requests / 15 minutes |
+
+---
+
+## Security
+
+- **Helmet** — Security headers (CSP, HSTS, X-Frame-Options, etc.)
+- **Zod** — Input validation on all mutation endpoints
+- **JWT** — Short-lived access tokens (15m) + rotating refresh tokens (7d)
+- **Multer** — File type whitelist (mp4/webm/quicktime, jpeg/png/webp) + 100MB limit
+- **Rate limiting** — Auth and upload endpoints throttled
+- **Cookie security** — `httpOnly`, `sameSite: strict`, `secure` in production
+
+---
+
+## Project Phases (Transformation Roadmap)
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| 0 | ✅ Complete | Security fixes, validation, indexes, logging |
+| 1 | 🔜 | Docker, CI/CD, health checks |
+| 2 | 🔜 | Watch history & resume playback |
+| 3 | 🔜 | BullMQ + FFmpeg + HLS streaming |
+| 4 | 🔜 | Meilisearch full-text search |
+| 5 | 🔜 | AI features (Whisper, RAG, Knowledge Graph) |
+| 6 | 🔜 | Real-time (Socket.IO, Watch Party) |
+| 7 | 🔜 | Analytics dashboard |
+| 8 | 🔜 | Recommendation system |

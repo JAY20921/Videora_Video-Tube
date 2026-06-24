@@ -14,6 +14,10 @@ const VideoPage     = lazy(() => import("./pages/VideoPage"));
 const Upload        = lazy(() => import("./pages/Upload"));
 const Login         = lazy(() => import("./pages/Login"));
 const Register      = lazy(() => import("./pages/Register"));
+const Landing       = lazy(() => import("./pages/Landing"));
+const Dashboard     = lazy(() => import("./pages/Dashboard"));
+const LikedVideos   = lazy(() => import("./pages/LikedVideos"));
+const Subscriptions = lazy(() => import("./pages/Subscriptions"));
 
 // ─── Eagerly-loaded layout components (small, needed immediately) ─────────────
 import Navbar          from "./components/Navbar";
@@ -23,7 +27,10 @@ import ProtectedRoute  from "./components/ProtectedRoute";
 // ─── Minimal fallback while a lazy chunk loads ────────────────────────────────
 const PageLoader = () => (
   <div className="flex-1 flex items-center justify-center text-neutral-500 text-sm">
-    Loading…
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+      <span>Loading…</span>
+    </div>
   </div>
 );
 
@@ -32,8 +39,13 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-neutral-900 text-gray-100 flex items-center justify-center">
-        Loading…
+      <div className="min-h-screen bg-neutral-950 text-gray-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center text-white font-bold text-xl shadow-lg animate-pulse">
+            V
+          </div>
+          <span className="text-neutral-500 text-sm">Loading Vidora…</span>
+        </div>
       </div>
     );
   }
@@ -41,34 +53,13 @@ export default function App() {
   // ─── Unauthenticated shell ────────────────────────────────────────────────
   if (!user) {
     return (
-      <div className="min-h-screen bg-neutral-900 text-gray-100 flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-neutral-950 text-gray-100 flex flex-col">
         <ErrorBoundary>
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login"    element={<Login />} />
               <Route path="/register" element={<Register />} />
-              <Route
-                path="*"
-                element={
-                  <div className="text-center">
-                    <h1 className="text-3xl font-bold mb-4">Login to watch the videos</h1>
-                    <div className="flex gap-4 justify-center mt-6">
-                      <Link
-                        to="/login"
-                        className="bg-rose-600 px-6 py-2 rounded-md hover:bg-rose-700 transition font-medium"
-                      >
-                        Login
-                      </Link>
-                      <Link
-                        to="/register"
-                        className="bg-neutral-800 border border-neutral-700 px-6 py-2 rounded-md hover:bg-neutral-700 transition font-medium"
-                      >
-                        Register
-                      </Link>
-                    </div>
-                  </div>
-                }
-              />
+              <Route path="*" element={<Landing />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>
@@ -78,17 +69,17 @@ export default function App() {
 
   // ─── Authenticated shell ──────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-neutral-900 text-gray-100 flex">
+    <div className="min-h-screen bg-neutral-950 text-gray-100 flex">
       <SideNav />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Navbar />
-        <main className="flex-1 container mx-auto px-4 py-6">
+        <main className="flex-1 px-4 lg:px-8 py-6">
           <motion.div
             key="page"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.35 }}
+            transition={{ duration: 0.3 }}
           >
             <ErrorBoundary>
               <Suspense fallback={<PageLoader />}>
@@ -98,13 +89,15 @@ export default function App() {
                   <Route path="/search"              element={<SearchResults />} />
                   <Route path="/profile/:username"   element={<Profile />} />
                   <Route path="/video/:id"           element={<VideoPage />} />
+                  <Route path="/liked"               element={<LikedVideos />} />
+                  <Route path="/subscriptions"       element={<Subscriptions />} />
                   <Route
                     path="/upload"
-                    element={
-                      <ProtectedRoute>
-                        <Upload />
-                      </ProtectedRoute>
-                    }
+                    element={<ProtectedRoute><Upload /></ProtectedRoute>}
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={<ProtectedRoute><Dashboard /></ProtectedRoute>}
                   />
                   {/* Redirect authenticated users away from auth pages */}
                   <Route path="/login"    element={<Navigate to="/" replace />} />

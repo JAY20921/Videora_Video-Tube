@@ -1,37 +1,49 @@
-import {v2 as cloudinary}  from 'cloudinary';
-import fs from 'fs';
-
+import { v2 as cloudinary } from "cloudinary";
+import fs from "fs";
+import { config } from "../config/index.js";
+import { logger } from "./logger.js";
 
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});                            
+  cloud_name: config.cloudinary.cloudName,
+  api_key: config.cloudinary.apiKey,
+  api_secret: config.cloudinary.apiSecret,
+});
 
- const uploadOnCloudinary = async (localFilePath, folder) => {
-    try {
-        if(!localFilePath){
-            throw new Error("File path is required");
+/**
+ * @param {string} localFilePath  - Absolute path to the temp file on disk
+ * @param {string} folder         - Cloudinary folder (e.g. "avatars", "videos", "thumbnails")
+ * @param {string} resourceType   - Resource type ("auto", "image", "video", "raw")
+ * @returns {Promise<object|null>} - Cloudinary upload response, or null on failure
+ */
+export const uploadOnCloudinary = async (localFilePath, folder = "misc", resourceType = "auto") => {
+  try {
+    if (!localFilePath) throw new Error("File path is required");
+
+    // upload_large automatically handles chunking and prevents timeouts for large videos
+    const response = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_large(
+        localFilePath,
+        {
+          resource_type: resourceType,
+          folder: `vidora/${folder}`,
+          chunk_size: 6000000, // 6MB chunks
+          ...(resourceType === "raw" ? { use_filename: true, unique_filename: false } : {}),
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
         }
-        // Upload file to Cloudinary
-       const response = await cloudinary.uploader.upload(localFilePath, {
-            resource_type: "auto",
+      );
+    });
 
-        })
-        //File uploaded successfully
-        // console.log("File uploaded to Cloudinary successfully", response.url);
-        fs.unlinkSync(localFilePath)
+    if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
 
-        return response;
+    return response;
+  } catch (error) {
+    if (localFilePath && fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
     }
-    catch (error) {
-if (localFilePath && fs.existsSync(localFilePath)) {
-    fs.unlinkSync(localFilePath);
-}
-        console.error("Error uploading file to Cloudinary", error);
-        return null;
-    }
-}
-
-
-export  {uploadOnCloudinary};
+    logger.error({ err: error.message || error }, "Cloudinary upload failed");
+    return null;
+  }
+};

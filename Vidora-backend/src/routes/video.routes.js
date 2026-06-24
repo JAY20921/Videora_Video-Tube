@@ -1,49 +1,56 @@
-import { Router } from 'express';
+import { Router } from "express";
 import {
-    deleteVideo,
-    getAllVideos,
-    getVideoById,
-    publishAVideo,
-    togglePublishStatus,
-    updateVideo,
-    incrementVideoView,
+  deleteVideo,
+  getAllVideos,
+  getVideoById,
+  getVideoStatus,
+  publishAVideo,
+  togglePublishStatus,
+  updateVideo,
+  incrementVideoView,
 } from "../controllers/video.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
+import { uploadLimiter } from "../middlewares/rateLimiter.middleware.js";
+import { validate, publishVideoSchema, updateVideoSchema } from "../middlewares/validate.middleware.js";
 
 const router = Router();
 
-// Public endpoint to increment views (do not require auth). Place before auth middleware.
+// ─── Public routes (no auth required) ─────────────────────────────────────────
+
+// Increment view count
 router.route("/view/:videoId").post(incrementVideoView);
 
-router.use(verifyJWT); // Apply verifyJWT middleware to protected routes in this file
+// Get all videos (browsing + search)
+router.route("/").get(getAllVideos);
 
-// ---- FIX: PUT THIS ROUTE BEFORE :videoId ----
+// Get a single video by ID — public so anyone can watch, but optional auth for sub status
+router.route("/:videoId").get(optionalVerifyJWT, getVideoById);
+
+// ─── Authenticated routes ─────────────────────────────────────────────────────
+router.use(verifyJWT);
+
+// Phase 3: Poll video processing status
+router.route("/status/:videoId").get(getVideoStatus);
+
 router.route("/toggle/publish/:videoId").patch(togglePublishStatus);
 
-// ---- Main Videos Route ----
 router
-    .route("/")
-    .get(getAllVideos)
-    .post(
-        upload.fields([
-            {
-                name: "videoFile",
-                maxCount: 1,
-            },
-            {
-                name: "thumbnail",
-                maxCount: 1,
-            },
-        ]),
-        publishAVideo
-    );
+  .route("/")
+  .post(
+    uploadLimiter,
+    upload.fields([
+      { name: "videoFile", maxCount: 1 },
+      { name: "thumbnail", maxCount: 1 },
+    ]),
+    validate(publishVideoSchema),
+    publishAVideo
+  );
 
-// ---- Dynamic videoId Route (MUST BE LAST) ----
+// Delete and update require auth — but GET is already handled above as public
 router
-    .route("/:videoId")
-    .get(getVideoById)
-    .delete(deleteVideo)
-    .patch(upload.single("thumbnail"), updateVideo);
+  .route("/:videoId")
+  .delete(deleteVideo)
+  .patch(upload.single("thumbnail"), validate(updateVideoSchema), updateVideo);
 
 export default router;
