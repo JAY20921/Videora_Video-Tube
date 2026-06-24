@@ -9,6 +9,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { getVideoQueue } from "../queues/videoQueue.js";
+import { syncVideoToSearch, removeVideoFromSearch } from "../services/searchSync.js";
 import { logger } from "../utils/logger.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
@@ -77,13 +78,20 @@ const publishAVideo = asyncHandler(async (req, res) => {
   // Extract duration from Cloudinary response
   const duration = uploadedVideo.duration || 0;
 
+  // Auto-generate thumbnail from the video if the user didn't upload one
+  // Cloudinary automatically returns a frame from the video if we request a .jpg
+  let finalThumbnail = uploadedThumbnail?.url;
+  if (!finalThumbnail && uploadedVideo.url) {
+    finalThumbnail = uploadedVideo.url.replace(/\.[^/.]+$/, ".jpg");
+  }
+
   // Phase 3: Mark video as "processing" — the worker will update to "ready" after HLS transcoding
   const newVideo = await Video.create({
     title: title.trim(),
     description: description.trim(),
     duration,
     videoFile: uploadedVideo.url,
-    thumbnail: uploadedThumbnail?.url || "",
+    thumbnail: finalThumbnail || "",
     owner: req.user._id,
     status: "processing",
   });
@@ -223,6 +231,11 @@ const updateVideo = asyncHandler(async (req, res) => {
     .populate({ path: "owner", select: "fullName username avatar" })
     .select("-__v");
 
+  // Phase 4 fix: manually sync to Meilisearch (findByIdAndUpdate bypasses save hooks)
+  if (updated && updated.isPublished) {
+    syncVideoToSearch(updated).catch(() => {});
+  }
+
   return res.status(200).json(new ApiResponse(200, updated, "Video updated successfully"));
 });
 
@@ -235,7 +248,9 @@ const deleteVideo = asyncHandler(async (req, res) => {
   if (String(video.owner) !== String(req.user._id))
     throw new ApiError(403, "Not authorized to delete this video");
 
-  await Video.deleteOne({ _id: videoId });
+  // Phase 4 fix: use findOneAndDelete so Mongoose post('findOneAndDelete') hook fires
+  // and removes the video from Meilisearch
+  await Video.findOneAndDelete({ _id: videoId });
 
   return res.status(200).json(new ApiResponse(200, {}, "Video deleted successfully"));
 });
@@ -251,6 +266,11 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
 
   video.isPublished = !video.isPublished;
   await video.save();
+
+  // Phase 4 fix: remove from search when unpublishing, sync when publishing
+  if (!video.isPublished) {
+    removeVideoFromSearch(video._id).catch(() => {});
+  }
 
   return res
     .status(200)

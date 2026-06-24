@@ -125,7 +125,7 @@ This architecture signals to a FAANG/Startup hiring manager:
 
 This section defines the exact High-Level Design (HLD), Low-Level Design (LLD), Tech Stack, and CI/CD steps for every remaining phase. 
 
-**Current State**: Phase 0 (Security & DB Fixes), Phase 1 (Docker/CI/CD Infrastructure), and Phase 2 (Watch History & Progress Systems) are **COMPLETE**. Phase 3 (Video Processing Pipeline) is **IN PROGRESS**.
+**Current State**: Phase 0 (Security & DB Fixes), Phase 1 (Docker/CI/CD Infrastructure), Phase 2 (Watch History & Progress Systems), Phase 3 (Video Processing Pipeline), Phase 4 (Fast Search Engine), and Phase 5 (AI Layer / RAG & NLP) are **COMPLETE**. Phase 6 (Real-Time & Collaboration) is **NEXT**.
 
 ---
 
@@ -173,19 +173,20 @@ This section defines the exact High-Level Design (HLD), Low-Level Design (LLD), 
 ### Phase 5: The AI Layer (RAG & NLP)
 *The crown jewel. Transforming video into queryable semantic knowledge.*
 
-* **Tech Stack**: BullMQ, OpenAI API (Whisper, GPT-4o-mini, text-embedding-3-small), Qdrant (Vector DB), D3.js.
-* **HLD**: When a video processing job completes, a chained `ai-job` is triggered. It generates a transcript, chunks it, embeds it, and stores it in Qdrant. The user interacts via a Chat UI, which performs a vector search against Qdrant to pull relevant transcript context before passing it to GPT.
+* **Tech Stack**: BullMQ, Groq API (Whisper Large V3 Turbo, Llama 3.3 70B, DeepSeek R1), Sentence Transformers (Embeddings), Qdrant (Vector DB), D3.js.
+* **HLD**: When a video processing job completes, a chained `ai-job` is triggered. It generates a transcript, chunks it, embeds it, and stores it in Qdrant. The user interacts via a Chat UI, which performs a vector search against Qdrant to pull relevant transcript context before passing it to a Groq LLM.
 * **LLD**:
-  - **Transcription**: Send raw audio to OpenAI Whisper. Receive WebVTT and raw JSON.
+  - **Transcription**: Send raw audio to Groq Whisper Large V3 Turbo. Receive transcript output with timestamps and subtitle data.
   - **Chunking Strategy**: Split transcript into ~200-word chunks with a 50-word overlap to preserve context.
+  - **Embedding Generation**: Use a local Sentence Transformers model such as `BAAI/bge-small-en-v1.5` or `sentence-transformers/all-MiniLM-L6-v2`.
   - **RAG Prompt**: *"You are an AI Tutor. Answer the user's question using ONLY the provided transcript chunks. Cite the start timestamp."*
-  - **Knowledge Graph**: Prompt GPT to extract `(Node A) -> [Relationship] -> (Node B)`. Render on frontend using `d3-force`.
+  - **Knowledge Graph**: Prompt Groq LLM to extract `(Node A) -> [Relationship] -> (Node B)`. Render on the frontend using `d3-force`.
 * **DevOps/CI**:
-  - Provision Qdrant cloud cluster (free tier).
-  - Mock OpenAI responses in CI to prevent API charges during automated testing.
-
----
-
+  - Provision Qdrant Cloud Free Tier.
+  - Mock Groq API responses in CI to avoid API costs during automated testing.
+  - Cache embeddings to avoid regenerating them on every run.
+  - Use retry logic for transcription and LLM calls.
+  
 ### Phase 6: Real-Time & Collaboration
 *Adding live engagement through WebSockets.*
 

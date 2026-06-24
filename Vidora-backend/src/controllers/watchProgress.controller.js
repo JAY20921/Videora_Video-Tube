@@ -26,8 +26,8 @@ const saveProgress = asyncHandler(async (req, res) => {
     { upsert: true, new: true }
   );
 
-  // Fire-and-forget: increment view count only on first meaningful engagement (>5s)
-  if (progress > 5) {
+  // Fire-and-forget: increment view count only on first meaningful engagement (>3s)
+  if (progress > 3) {
     Video.findByIdAndUpdate(videoId, { $inc: { views: 0 } }).exec(); // no-op, view count handled in video.controller
   }
 

@@ -38,4 +38,18 @@ export const config = {
     host: process.env.MEILI_HOST || "http://localhost:7700",
     apiKey: process.env.MEILI_MASTER_KEY || "",
   },
+
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || "",
+    baseUrl: "https://api.groq.com/openai/v1",
+    whisperModel: "whisper-large-v3-turbo",
+    chatModel: "llama-3.3-70b-versatile",
+    embeddingModel: "text-embedding-3-small",
+  },
+
+  qdrant: {
+    url: process.env.QDRANT_URL || "http://localhost:6333",
+    apiKey: process.env.QDRANT_API_KEY || "",
+    collectionName: "vidora-transcripts",
+  },
 };

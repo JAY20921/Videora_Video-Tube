@@ -12,15 +12,14 @@
  * Requires: FFmpeg installed on the system/container, Redis running
  */
 
-import dotenv from "dotenv";
-dotenv.config();
-
+import "dotenv/config";
 import { Worker } from "bullmq";
 import { redisConfig } from "./config/redis.js";
 import { logger } from "./utils/logger.js";
 import mongoose from "mongoose";
 import { Video } from "./models/video.model.js";
 import { uploadOnCloudinary } from "./utils/cloudinary.js";
+import { getAiQueue } from "./queues/aiQueue.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
@@ -165,7 +164,9 @@ async function processVideoJob(job) {
 
     for (const file of hlsFiles) {
       const filePath = path.join(hlsDir, file);
-      const uploaded = await uploadOnCloudinary(filePath, `hls/${videoId}`);
+      // HLS segments (.ts) and playlists (.m3u8) should be uploaded as 'raw' 
+      // so Cloudinary doesn't try to process them as individual videos and fail.
+      const uploaded = await uploadOnCloudinary(filePath, `hls/${videoId}`, "raw");
       if (uploaded?.url) {
         uploadedFiles[file] = uploaded.url;
       }
@@ -173,10 +174,13 @@ async function processVideoJob(job) {
     job.updateProgress(90);
 
     // 6. Get the master playlist URL
-    const masterUrl = uploadedFiles["master.m3u8"];
+    let masterUrl = uploadedFiles["master.m3u8"];
     if (!masterUrl) {
       throw new Error("Master playlist upload failed — master.m3u8 not found in uploads");
     }
+
+    // Strip version tag from URL (e.g., /v1234567/) so relative paths don't break
+    masterUrl = masterUrl.replace(/\/v\d+\//, '/');
 
     // 7. Update MongoDB — video is now ready
     await Video.findByIdAndUpdate(videoId, {
@@ -187,6 +191,25 @@ async function processVideoJob(job) {
     job.updateProgress(100);
 
     logger.info({ videoId, hlsUrl: masterUrl }, "Video transcoding completed successfully");
+
+    // Phase 5: Chain AI processing job after successful transcoding
+    try {
+      await getAiQueue().add(
+        "ai-process",
+        {
+          videoId,
+          rawUrl,
+          title,
+          duration: job.data.duration || 0,
+        },
+        { jobId: `ai-${videoId}` }
+      );
+      logger.info({ videoId }, "AI processing job enqueued");
+    } catch (aiErr) {
+      // AI queue failure should not affect video transcoding success
+      logger.warn({ err: aiErr.message, videoId }, "Failed to enqueue AI job — AI features skipped");
+      await Video.findByIdAndUpdate(videoId, { aiStatus: "skipped" });
+    }
 
     return { videoId, hlsUrl: masterUrl };
   } catch (error) {
@@ -210,23 +233,19 @@ async function start() {
   // Ensure temp directory exists
   await fs.mkdir(TEMP_DIR, { recursive: true });
 
-  // Connect to MongoDB (same connection as the main API)
+  // Connect to MongoDB — explicitly target 'videotube' database
   const mongoUri = process.env.MONGODB_URI;
   if (!mongoUri) {
     logger.error("MONGODB_URI is not set — worker cannot start");
     process.exit(1);
   }
-  await mongoose.connect(mongoUri);
-  logger.info("Worker connected to MongoDB");
+  await mongoose.connect(`${mongoUri}/videotube`);
+  logger.info("Worker connected to MongoDB (videotube)");
 
   // Create BullMQ worker
   const worker = new Worker("video-processing", processVideoJob, {
     connection: redisConfig,
     concurrency: 1, // Process one video at a time (FFmpeg is CPU-heavy)
-    limiter: {
-      max: 2,
-      duration: 60_000, // max 2 jobs per minute
-    },
   });
 
   worker.on("completed", (job, result) => {

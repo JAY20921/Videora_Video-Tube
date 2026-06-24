@@ -16,6 +16,7 @@ function toSearchDoc(video) {
     id: String(video._id),
     title: video.title || "",
     description: video.description || "",
+    tags: video.tags || [],
     thumbnail: video.thumbnail || "",
     duration: video.duration || 0,
     views: video.views || 0,

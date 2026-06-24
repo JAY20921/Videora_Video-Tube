@@ -4,7 +4,7 @@ import { uploadVideo } from "../api/videos";
 import { useToast } from "./ToastProvider";
 import Loading from "./Loading";
 import { getVideoById } from "../api/videos";
-import { UploadCloud, Image as ImageIcon, Video as VideoIcon, X, CheckCircle2, Film } from "lucide-react";
+import { UploadCloud, Image as ImageIcon, Video as VideoIcon, X, CheckCircle2, Film, Loader2 } from "lucide-react";
 
 export default function UploadForm() {
   const [videoFile, setVideoFile] = useState(null);
@@ -313,7 +313,7 @@ export default function UploadForm() {
                 disabled={uploading || !videoFile}
                 className="flex items-center gap-2 px-8 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-semibold rounded-xl transition-all shadow-[0_0_15px_-3px_rgba(225,29,72,0.4)] disabled:opacity-50 disabled:shadow-none"
               >
-                {uploading ? <Loading size={18} color="white" /> : <UploadCloud size={20} />}
+                {uploading ? <Loader2 size={18} className="animate-spin text-white" /> : <UploadCloud size={20} />}
                 {uploading ? 'Uploading...' : 'Publish Video'}
               </button>
             </div>

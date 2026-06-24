@@ -49,6 +49,7 @@ import playlistRouter from "./routes/playlist.routes.js";
 import dashboardRouter from "./routes/dashboard.routes.js";
 import watchProgressRouter from "./routes/watchProgress.routes.js";
 import searchRouter from "./routes/search.routes.js";
+import aiRouter from "./routes/ai.routes.js";
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use("/api/v1/healthcheck", healthcheckRouter);
@@ -62,6 +63,7 @@ app.use("/api/v1/playlist", playlistRouter);
 app.use("/api/v1/dashboard", dashboardRouter);
 app.use("/api/v1/watch-progress", watchProgressRouter);
 app.use("/api/v1/search", searchRouter);
+app.use("/api/v1/ai", aiRouter);
 
 // ─── Global error handler (MUST be last) ─────────────────────────────────────
 app.use(errorHandler);

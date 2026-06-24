@@ -50,12 +50,13 @@ export async function getVideosIndex() {
 
       // Configure searchable & displayed attributes
       await index.updateSettings({
-        searchableAttributes: ["title", "description", "ownerName"],
+        searchableAttributes: ["title", "description", "tags", "ownerName"],
         displayedAttributes: [
-          "id", "title", "description", "thumbnail", "duration",
+          "id", "title", "description", "tags", "thumbnail", "duration",
           "views", "ownerName", "ownerUsername", "ownerAvatar",
           "ownerId", "createdAt",
         ],
+        filterableAttributes: ["tags", "ownerId"],
         // Typo tolerance: 1 typo for words 5+ chars, 2 for 9+
         typoTolerance: {
           enabled: true,

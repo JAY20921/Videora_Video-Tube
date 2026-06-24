@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { getVideoById, incrementView } from "../api/videos";
 import PlayerWrapper from "../components/PlayerWrapper";
@@ -7,6 +7,7 @@ import CommentSection from "../components/CommentSection";
 import LikeButton from "../components/LikeButton";
 import SubscribeButton from "../components/SubscribeButton";
 import Loading from "../components/Loading";
+import AiTutor from "../components/AiTutor";
 import { Share2, Eye } from "lucide-react";
 
 function timeAgo(dateStr) {
@@ -23,6 +24,13 @@ export default function VideoPage() {
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const playerRef = useRef(null);
+
+  const handleSeekTo = useCallback((seconds) => {
+    if (playerRef.current?.seekTo) {
+      playerRef.current.seekTo(seconds);
+    }
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -62,6 +70,7 @@ export default function VideoPage() {
       <div className="lg:col-span-2 space-y-4">
         {/* Player */}
         <PlayerWrapper
+          ref={playerRef}
           videoId={video._id}
           url={video.videoFile || video.fileUrl || video.videoUrl}
           hlsUrl={video.hlsUrl || ""}
@@ -144,6 +153,8 @@ export default function VideoPage() {
       <aside className="space-y-4">
         <RecommendedVideos currentVideoId={video._id} />
       </aside>
+      {/* AI Tutor */}
+      <AiTutor videoId={video._id} onSeekTo={handleSeekTo} />
     </div>
   );
 }

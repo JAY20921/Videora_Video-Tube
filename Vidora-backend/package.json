@@ -7,8 +7,10 @@
   "scripts": {
     "dev": "nodemon -r dotenv/config src/index.js",
     "start": "node src/index.js",
-    "worker": "node src/worker.js",
-    "worker:dev": "nodemon src/worker.js"
+    "worker": "node -r dotenv/config src/worker.js",
+    "worker:dev": "nodemon -r dotenv/config src/worker.js",
+    "ai-worker": "node -r dotenv/config src/aiWorker.js",
+    "ai-worker:dev": "nodemon -r dotenv/config src/aiWorker.js"
   },
   "keywords": [
     "javascript",

@@ -59,6 +59,30 @@ const videoSchema = new Schema(
       ref: "User",
       required: true,
     },
+    /**
+     * Phase 4/13: Tags for search indexing and tag-based recommendations.
+     */
+    tags: [{ type: String }],
+    /**
+     * Phase 5: Reference to the AI-generated transcript document.
+     */
+    transcript: {
+      type: Schema.Types.ObjectId,
+      ref: "Transcript",
+    },
+    /**
+     * Phase 5: AI processing pipeline status.
+     * - "pending"     — queued for AI processing
+     * - "processing"  — transcription/embedding in progress
+     * - "ready"       — AI features available (tutor, chapters, graph)
+     * - "failed"      — AI processing failed after retries
+     * - "skipped"     — no audio track / too short
+     */
+    aiStatus: {
+      type: String,
+      enum: ["pending", "processing", "ready", "failed", "skipped"],
+      default: "pending",
+    },
   },
   { timestamps: true }
 );

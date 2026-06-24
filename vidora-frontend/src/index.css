@@ -56,8 +56,39 @@ a, button, input, select, textarea {
   transition-duration: 150ms;
 }
 
-/* ─── Range input (seek bar) ─────────────────────────────────────────────────── */
-input[type="range"] {
+/* ─── Player volume slider ───────────────────────────────────────────────────── */
+.vidora-player input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  cursor: pointer;
+  outline: none;
+}
+
+.vidora-player input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+}
+
+.vidora-player input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+}
+
+/* ─── Generic range inputs outside player ────────────────────────────────────── */
+input[type="range"]:not(.vidora-player *) {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
@@ -66,7 +97,7 @@ input[type="range"] {
   cursor: pointer;
 }
 
-input[type="range"]::-webkit-slider-thumb {
+input[type="range"]:not(.vidora-player *)::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 14px;
   height: 14px;
