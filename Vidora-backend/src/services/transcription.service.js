@@ -29,6 +29,7 @@ async function extractAudio(videoPath, outputPath) {
   const cmd = [
     `"${ffmpeg}"`,
     `-i "${videoPath}"`,
+    `-threads 1`,
     `-vn`,                    // no video
     `-acodec libmp3lame`,     // MP3 codec
     `-ar 16000`,              // 16kHz sample rate (Whisper optimal)
