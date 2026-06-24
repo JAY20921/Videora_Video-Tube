@@ -102,9 +102,16 @@ async function processAiJob(job) {
     logger.info({ videoId }, "Transcribing with Whisper...");
     let { segments, fullText, language } = await transcribeVideo(inputPath, jobDir);
 
-    // Fallback: If no voice or very short transcript, use title and description
-    if (fullText.trim().length < 20) {
-      logger.info({ videoId }, "Transcript empty or too short. Using title and description as fallback.");
+    // Whisper is known to hallucinate phrases like "Thank you" or "Subscribe" when fed silence/noise.
+    // Clean out common repetitive hallucinations to properly trigger our fallback.
+    const cleanText = fullText
+      .replace(/(thank you|thanks for watching|subscribe|thanks|you|bye)/gi, "")
+      .replace(/[^a-zA-Z0-9]/g, "") // remove punctuation for the length check
+      .trim();
+
+    // Fallback: If no voice or very short transcript (less than 50 meaningful chars), use title/desc
+    if (cleanText.length < 50) {
+      logger.info({ videoId, cleanTextLength: cleanText.length }, "Transcript empty or hallucinated. Using title and description as fallback.");
       const video = await Video.findById(videoId);
       const fallbackText = `${title}. ${video?.description || ""}`.trim();
       

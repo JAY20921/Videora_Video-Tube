@@ -11,6 +11,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { getVideoQueue } from "../queues/videoQueue.js";
 import { syncVideoToSearch, removeVideoFromSearch } from "../services/searchSync.js";
 import { logger } from "../utils/logger.js";
+import { getRedisClient } from "../config/redis.js";
 
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy = "createdAt", sortType = "desc", userId } = req.query;
@@ -175,9 +176,30 @@ const incrementVideoView = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId");
 
-  const video = await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } }, { new: true })
-    .populate({ path: "owner", select: "fullName username avatar" })
-    .lean();
+  const redis = getRedisClient();
+  const identifier = req.user?._id || req.ip || req.headers["x-forwarded-for"] || "anonymous";
+  const viewKey = `view:${videoId}:${identifier}`;
+
+  // Check if this user/IP has viewed this video in the last 1 hour
+  const hasViewed = await redis.get(viewKey);
+
+  let video;
+
+  if (hasViewed) {
+    // Already viewed recently, just fetch the video without incrementing
+    video = await Video.findById(videoId)
+      .populate({ path: "owner", select: "fullName username avatar" })
+      .lean();
+  } else {
+    // New view, increment count and set Redis key for 1 hour (3600 seconds)
+    video = await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } }, { new: true })
+      .populate({ path: "owner", select: "fullName username avatar" })
+      .lean();
+    
+    if (video) {
+      await redis.setex(viewKey, 3600, "1");
+    }
+  }
 
   if (!video) throw new ApiError(404, "Video not found");
 
