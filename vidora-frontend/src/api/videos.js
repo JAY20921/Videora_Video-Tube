@@ -97,3 +97,9 @@ export const getVideoStatus = async (id) => {
   const res = await axios.get(`/videos/status/${id}`);
   return res.data?.data ?? { status: "ready" };
 };
+
+// Retranscode video
+export const retranscodeVideo = async (id) => {
+  const res = await axios.post(`/videos/retranscode/${id}`);
+  return res.data;
+};

@@ -301,6 +301,49 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     );
 });
 
+const retranscodeVideo = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+  if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId");
+
+  const video = await Video.findById(videoId);
+  if (!video) throw new ApiError(404, "Video not found");
+  
+  if (String(video.owner) !== String(req.user._id)) {
+    throw new ApiError(403, "Not authorized to re-transcode this video");
+  }
+
+  // Update status back to processing
+  video.status = "processing";
+  await video.save();
+
+  try {
+    const enqueuePromise = getVideoQueue().add(
+      "transcode",
+      {
+        videoId: String(video._id),
+        rawUrl: video.videoFile,
+        title: video.title,
+        duration: Math.round(video.duration || 0)
+      },
+      { jobId: `transcode-${video._id}` }
+    );
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Redis connection timeout")), 2000)
+    );
+
+    await Promise.race([enqueuePromise, timeoutPromise]);
+    logger.info({ videoId: video._id }, "Video re-transcoding job enqueued");
+  } catch (queueError) {
+    logger.warn({ err: queueError, videoId: video._id }, "Queue unavailable — video set to ready");
+    video.status = "ready";
+    await video.save();
+    throw new ApiError(500, "Failed to enqueue transcoding job");
+  }
+
+  return res.status(200).json(new ApiResponse(200, video, "Video enqueued for re-transcoding"));
+});
+
 /**
  * GET /api/v1/videos/status/:videoId
  * Returns the current processing status of a video.
@@ -331,4 +374,5 @@ export {
   updateVideo,
   deleteVideo,
   togglePublishStatus,
+  retranscodeVideo,
 };

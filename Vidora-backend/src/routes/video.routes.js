@@ -8,6 +8,7 @@ import {
   togglePublishStatus,
   updateVideo,
   incrementVideoView,
+  retranscodeVideo,
 } from "../controllers/video.controller.js";
 import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -34,6 +35,8 @@ router.use(verifyJWT);
 router.route("/status/:videoId").get(getVideoStatus);
 
 router.route("/toggle/publish/:videoId").patch(togglePublishStatus);
+
+router.route("/retranscode/:videoId").post(retranscodeVideo);
 
 router
   .route("/")

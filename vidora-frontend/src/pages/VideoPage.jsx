@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getVideoById, incrementView } from "../api/videos";
+import { getVideoById, incrementView, retranscodeVideo } from "../api/videos";
 import PlayerWrapper from "../components/PlayerWrapper";
 import RecommendedVideos from "../components/RecommendedVideos";
 import CommentSection from "../components/CommentSection";
@@ -8,7 +8,10 @@ import LikeButton from "../components/LikeButton";
 import SubscribeButton from "../components/SubscribeButton";
 import Loading from "../components/Loading";
 import AiTutor from "../components/AiTutor";
-import { Share2, Eye } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { Share2, Eye, RefreshCw } from "lucide-react";
+
+import { useToast } from "../components/ToastProvider";
 
 function timeAgo(dateStr) {
   const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
@@ -21,10 +24,26 @@ function timeAgo(dateStr) {
 
 export default function VideoPage() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const push = useToast();
   const [video, setVideo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [retranscoding, setRetranscoding] = useState(false);
   const playerRef = useRef(null);
+
+  const handleRetranscode = async () => {
+    try {
+      setRetranscoding(true);
+      await retranscodeVideo(id);
+      push("Video enqueued for transcoding!", { type: "success" });
+      setVideo(prev => ({ ...prev, status: "processing" }));
+    } catch (err) {
+      push(err.response?.data?.message || "Failed to retranscode", { type: "error" });
+    } finally {
+      setRetranscoding(false);
+    }
+  };
 
   const handleSeekTo = useCallback((seconds) => {
     if (playerRef.current?.seekTo) {
@@ -93,6 +112,16 @@ export default function VideoPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            {user && user._id === owner._id && (
+              <button
+                onClick={handleRetranscode}
+                disabled={retranscoding}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-rose-600/20 border border-rose-500/50 text-rose-400 hover:bg-rose-600/30 transition text-sm font-medium disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={retranscoding ? "animate-spin" : ""} />
+                {retranscoding ? "Enqueuing..." : "Retranscode"}
+              </button>
+            )}
             <LikeButton
               videoId={video._id}
               initialLiked={video.isLiked ?? false}
