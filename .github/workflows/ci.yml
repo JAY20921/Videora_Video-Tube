@@ -1,0 +1,53 @@
+name: Vidora CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./Vidora-backend
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+        cache-dependency-path: './Vidora-backend/package-lock.json'
+        
+    - name: Install Dependencies
+      run: npm ci
+
+    # Optional: If you had tests, you'd run them here
+    # - name: Run Tests
+    #   run: npm test
+
+  frontend-checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./vidora-frontend
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+        cache-dependency-path: './vidora-frontend/package-lock.json'
+        
+    - name: Install Dependencies
+      run: npm ci
+
+    - name: Build Frontend
+      run: npm run build

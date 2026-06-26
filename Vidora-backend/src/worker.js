@@ -239,7 +239,7 @@ async function start() {
   logger.info("Worker connected to MongoDB (videotube)");
 
   // Render Free Tier Hack: Bind to a port so Render thinks this is a valid Web Service
-  const port = process.env.PORT || 8081; // using 8081 to avoid conflict with main API if run locally
+  const port = process.env.VIDEO_WORKER_PORT || 8081; // separate from main API's PORT
   http.createServer((req, res) => {
     res.writeHead(200);
     res.end("Video Worker is running");
