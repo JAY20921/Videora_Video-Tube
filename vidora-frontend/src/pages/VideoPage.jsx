@@ -8,6 +8,7 @@ import LikeButton from "../components/LikeButton";
 import SubscribeButton from "../components/SubscribeButton";
 import Loading from "../components/Loading";
 import AiTutor from "../components/AiTutor";
+import LiveChat from "../components/LiveChat";
 import { useAuth } from "../context/AuthContext";
 import { Share2, Eye, RefreshCw } from "lucide-react";
 
@@ -179,7 +180,10 @@ export default function VideoPage() {
       </div>
 
       {/* Sidebar */}
-      <aside className="space-y-4">
+      <aside className="space-y-4 flex flex-col">
+        <div className="h-[400px] shrink-0">
+          <LiveChat videoId={video._id} />
+        </div>
         <RecommendedVideos currentVideoId={video._id} />
       </aside>
       {/* AI Tutor */}

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useVideoProgress } from "../hooks/useVideoProgress";
 import { getVideoStatus } from "../api/videos";
+import { useSocket } from "../context/SocketContext";
 
 /* ──────────────────────── helpers ──────────────────────── */
 const fmt = (s) => {
@@ -65,6 +66,50 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
   const [effectiveUrl, setEffectiveUrl] = useState(hlsUrl || url);
 
   const { resumeTimeRef } = useVideoProgress(videoId, videoRef);
+  const socket = useSocket();
+  const remoteAction = useRef(false);
+
+  /* ──── Socket Sync ──── */
+  useEffect(() => {
+    if (!socket || !videoId) return;
+
+    socket.emit("join-video-room", videoId);
+
+    const onSyncPlay = () => {
+      const v = videoRef.current;
+      if (v && v.paused) {
+        remoteAction.current = true;
+        v.play().catch(() => {});
+      }
+    };
+
+    const onSyncPause = () => {
+      const v = videoRef.current;
+      if (v && !v.paused) {
+        remoteAction.current = true;
+        v.pause();
+      }
+    };
+
+    const onSyncSeek = (time) => {
+      const v = videoRef.current;
+      if (v && Math.abs(v.currentTime - time) > 1) {
+        remoteAction.current = true;
+        v.currentTime = time;
+      }
+    };
+
+    socket.on("sync-play", onSyncPlay);
+    socket.on("sync-pause", onSyncPause);
+    socket.on("sync-seek", onSyncSeek);
+
+    return () => {
+      socket.emit("leave-video-room", videoId);
+      socket.off("sync-play", onSyncPlay);
+      socket.off("sync-pause", onSyncPause);
+      socket.off("sync-seek", onSyncSeek);
+    };
+  }, [socket, videoId]);
 
   /* ──── Expose seekTo via ref for AiTutor ──── */
   useImperativeHandle(ref, () => ({
@@ -322,8 +367,20 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
         }}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => setDuration(e.target.duration)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={() => {
+          setPlaying(true);
+          if (!remoteAction.current && socket) socket.emit("sync-play", { videoId });
+          remoteAction.current = false;
+        }}
+        onPause={() => {
+          setPlaying(false);
+          if (!remoteAction.current && socket) socket.emit("sync-pause", { videoId });
+          remoteAction.current = false;
+        }}
+        onSeeked={() => {
+          if (!remoteAction.current && socket && videoRef.current) socket.emit("sync-seek", { videoId, time: videoRef.current.currentTime });
+          remoteAction.current = false;
+        }}
         onWaiting={() => setWaiting(true)}
         onCanPlay={() => setWaiting(false)}
         onVolumeChange={(e) => { setVolume(e.target.volume); setMuted(e.target.muted); }}

@@ -5,16 +5,19 @@ import App from "./App";
 import "./index.css";
 import { ToastProvider } from "./components/ToastProvider";
 import { AuthProvider } from "./context/AuthContext";
+import { SocketProvider } from "./context/SocketContext";
 import { Analytics } from "@vercel/analytics/react";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <App />
-          <Analytics />
-        </ToastProvider>
+        <SocketProvider>
+          <ToastProvider>
+            <App />
+            <Analytics />
+          </ToastProvider>
+        </SocketProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

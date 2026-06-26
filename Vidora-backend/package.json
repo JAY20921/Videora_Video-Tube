@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@qdrant/js-client-rest": "^1.18.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.79.0",
     "cloudinary": "^2.8.0",
@@ -46,6 +47,7 @@
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "serve": "^14.2.5",
+    "socket.io": "^4.8.3",
     "zod": "^4.4.3"
   }
 }

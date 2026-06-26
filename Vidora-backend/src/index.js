@@ -3,6 +3,7 @@ import connectDB from "./db/index.js";
 import { app } from "./app.js";
 import { logger } from "./utils/logger.js";
 import { config } from "./config/index.js";
+import { initSocket } from "./socket.js";
 
 let server;
 
@@ -28,6 +29,9 @@ connectDB()
     server = app.listen(config.port, "0.0.0.0", () => {
       logger.info(`Server running on port ${config.port} [${config.nodeEnv}]`);
     });
+    
+    // Initialize Socket.IO
+    initSocket(server);
 
     server.on("error", (error) => {
       logger.error({ err: error }, "Server error");
