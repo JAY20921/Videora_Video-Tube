@@ -68,47 +68,42 @@ async function downloadFile(url, destPath) {
 }
 
 /**
- * Build the FFmpeg command for multi-bitrate HLS transcoding.
+ * Run FFmpeg sequentially to transcode the video into multi-bitrate HLS.
+ * This prevents high memory spikes (OOM crashes) on constrained environments like Render Free Tier.
  * Produces one .m3u8 variant per profile + a master.m3u8 playlist.
  */
-function buildFFmpegCommand(inputPath, outputDir) {
-  const maps = [];
-  const streams = [];
+async function runSequentialTranscoding(inputPath, outputDir, videoId) {
+  for (let i = 0; i < PROFILES.length; i++) {
+    const p = PROFILES[i];
+    logger.info({ videoId, profile: p.name }, `Transcoding profile ${p.name}...`);
+    
+    const cmd = [
+      `"${ffmpeg}" -i "${inputPath}" -y`,
+      `-threads 1`,
+      `-max_muxing_queue_size 1024`,
+      `-c:v libx264 -preset fast -g 48 -sc_threshold 0`,
+      `-b:v ${p.bitrate} -maxrate:v ${p.maxrate} -bufsize:v ${p.bufsize}`,
+      `-vf "scale=w=${p.width}:h=${p.height}:force_original_aspect_ratio=decrease,pad=${p.width}:${p.height}:(ow-iw)/2:(oh-ih)/2"`,
+      `-c:a aac -b:a 128k -ac 2`,
+      `-f hls`,
+      `-hls_time 10`,
+      `-hls_playlist_type vod`,
+      `-hls_flags independent_segments`,
+      `-hls_segment_filename "${path.join(outputDir, `stream_${i}_%03d.ts`)}"`,
+      `"${path.join(outputDir, `stream_${i}.m3u8`)}"`,
+    ].join(" ");
 
-  PROFILES.forEach((p, i) => {
-    maps.push(`-map 0:v:0 -map 0:a:0`);
-    streams.push(
-      `-c:v:${i} libx264 -preset fast -g 48 -sc_threshold 0`,
-      `-b:v:${i} ${p.bitrate} -maxrate:v:${i} ${p.maxrate} -bufsize:v:${i} ${p.bufsize}`,
-      `-vf:${i} "scale=w=${p.width}:h=${p.height}:force_original_aspect_ratio=decrease,pad=${p.width}:${p.height}:(ow-iw)/2:(oh-ih)/2"`,
-      `-c:a:${i} aac -b:a:${i} 128k -ac 2`
-    );
-  });
+    await execAsync(cmd, { maxBuffer: 50 * 1024 * 1024 }); // 50MB stdout buffer
+  }
 
-  const masterPlaylist = PROFILES.map(
-    (p, i) => `#EXT-X-STREAM-INF:BANDWIDTH=${parseInt(p.bitrate) * 1000},RESOLUTION=${p.width}x${p.height}\nstream_${i}.m3u8`
-  ).join("\n");
-
-  // Write master playlist manually after FFmpeg
-  const varStreams = PROFILES.map((_, i) => `v:${i},a:${i}`).join(" ");
-
-  const cmd = [
-    `"${ffmpeg}" -i "${inputPath}" -y`,
-    `-threads 1`,
-    `-max_muxing_queue_size 1024`,
-    ...maps,
-    ...streams,
-    `-f hls`,
-    `-hls_time 10`,
-    `-hls_playlist_type vod`,
-    `-hls_flags independent_segments`,
-    `-hls_segment_filename "${path.join(outputDir, "stream_%v_%03d.ts")}"`,
-    `-master_pl_name master.m3u8`,
-    `-var_stream_map "${varStreams}"`,
-    `"${path.join(outputDir, "stream_%v.m3u8")}"`,
-  ].join(" ");
-
-  return cmd;
+  // Write master playlist manually after all sequential FFmpeg runs complete
+  const masterContent = [
+    "#EXTM3U",
+    "#EXT-X-VERSION:3",
+    ...PROFILES.map((p, i) => `#EXT-X-STREAM-INF:BANDWIDTH=${parseInt(p.bitrate) * 1000},RESOLUTION=${p.width}x${p.height}\nstream_${i}.m3u8`)
+  ].join("\n");
+  
+  await fs.writeFile(path.join(outputDir, "master.m3u8"), masterContent);
 }
 
 // ─── Job Processor ────────────────────────────────────────────────────────────
@@ -134,10 +129,9 @@ async function processVideoJob(job) {
     const hlsDir = path.join(jobDir, "hls");
     await fs.mkdir(hlsDir, { recursive: true });
 
-    // 4. Run FFmpeg
-    logger.info({ videoId }, "Running FFmpeg transcoding...");
-    const ffmpegCmd = buildFFmpegCommand(inputPath, hlsDir);
-    await execAsync(ffmpegCmd, { maxBuffer: 50 * 1024 * 1024 }); // 50MB stdout buffer
+    // 4. Run FFmpeg (Sequentially to save memory)
+    logger.info({ videoId }, "Running sequential FFmpeg transcoding...");
+    await runSequentialTranscoding(inputPath, hlsDir, videoId);
     job.updateProgress(60);
 
     // 4.5 Generate Spritesheet for hover thumbnails
