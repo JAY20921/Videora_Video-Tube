@@ -1,16 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { fetchVideos } from "../api/videos";
+import { fetchVideos, deleteVideo } from "../api/videos";
 import { getChannelProfile } from "../api/users";
 import VideoCard from "../components/VideoCard";
 import SubscribeButton from "../components/SubscribeButton";
 import Loading from "../components/Loading";
 import { Upload, Film } from "lucide-react";
+import { useToast } from "../components/ToastProvider";
 
 export default function ProfilePage() {
   const { username } = useParams();
   const { user } = useAuth();
+  const push = useToast();
 
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,17 @@ export default function ProfilePage() {
 
   const isOwnProfile = user && user.username === username;
   const displayData = channel || (isOwnProfile ? user : null);
+
+  const handleDelete = async (videoId) => {
+    if (!window.confirm("Are you sure you want to delete this video? This action cannot be undone.")) return;
+    try {
+      await deleteVideo(videoId);
+      setVideos((prev) => prev.filter((v) => v._id !== videoId));
+      push("Video deleted successfully", { type: "success" });
+    } catch (err) {
+      push(err.response?.data?.message || "Failed to delete video", { type: "error" });
+    }
+  };
 
   if (loading) return <Loading text="Loading profile..." />;
 
@@ -128,7 +141,11 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
             {videos.map((v) => (
-              <VideoCard key={v._id} video={v} />
+              <VideoCard 
+                key={v._id} 
+                video={v} 
+                onDelete={(isOwnProfile || user?.role === "admin") ? handleDelete : undefined} 
+              />
             ))}
           </div>
         )}

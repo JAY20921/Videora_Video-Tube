@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Users } from "lucide-react";
+import { Send, Users, MessageSquareOff, MessageSquare } from "lucide-react";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 
-export default function LiveChat({ videoId }) {
+export default function LiveChat({ videoId, partyId, isHost, chatEnabled = true }) {
   const socket = useSocket();
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    setMessages([]); // Clear messages when switching to/from watchparty
+  }, [partyId]);
 
   useEffect(() => {
     if (!socket || !videoId) return;
@@ -22,7 +26,7 @@ export default function LiveChat({ videoId }) {
     return () => {
       socket.off("new-chat", handleNewChat);
     };
-  }, [socket, videoId]);
+  }, [socket, videoId, partyId]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -31,10 +35,12 @@ export default function LiveChat({ videoId }) {
 
   const sendMessage = (e) => {
     e.preventDefault();
-    if (!input.trim() || !socket) return;
+    if (socket && !socket.connected) socket.connect();
+    if (!input.trim() || !socket || (!chatEnabled && !isHost)) return;
 
     const messageData = {
       videoId,
+      partyId,
       message: input.trim(),
       user: {
         _id: user?._id || "anonymous",
@@ -51,14 +57,33 @@ export default function LiveChat({ videoId }) {
     setInput("");
   };
 
+  const handleToggleChat = () => {
+    if (isHost && socket) {
+      socket.emit("toggle-chat", { partyId, enabled: !chatEnabled });
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-neutral-900 border border-white/10 rounded-2xl overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-white/10 bg-neutral-900/50 flex items-center gap-2">
-        <Users size={18} className="text-rose-500" />
-        <h3 className="font-semibold text-white">Live Chat</h3>
-        <span className="ml-auto text-xs px-2 py-1 bg-rose-500/10 text-rose-500 rounded-full font-medium flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+        <Users size={18} className={partyId ? "text-purple-500" : "text-rose-500"} />
+        <h3 className="font-semibold text-white">
+          {partyId ? "Party Chat" : "Live Chat"}
+        </h3>
+        
+        {isHost && (
+          <button 
+            onClick={handleToggleChat} 
+            title={chatEnabled ? "Disable Chat for Viewers" : "Enable Chat for Viewers"}
+            className={`ml-2 p-1.5 rounded-full transition-colors ${chatEnabled ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30'}`}
+          >
+            {chatEnabled ? <MessageSquare size={14} /> : <MessageSquareOff size={14} />}
+          </button>
+        )}
+
+        <span className={`ml-auto text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1.5 ${partyId ? 'bg-purple-500/10 text-purple-400' : 'bg-rose-500/10 text-rose-500'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${partyId ? 'bg-purple-500' : 'bg-rose-500'}`} />
           Live
         </span>
       </div>
@@ -107,18 +132,27 @@ export default function LiveChat({ videoId }) {
       </div>
 
       {/* Input Area */}
-      <form onSubmit={sendMessage} className="p-3 bg-neutral-900 border-t border-white/10">
+      <form onSubmit={sendMessage} className="p-3 bg-neutral-900 border-t border-white/10 relative">
+        {!chatEnabled && !isHost && (
+          <div className="absolute inset-0 bg-neutral-900/90 backdrop-blur-sm z-10 flex items-center justify-center border-t border-white/10">
+            <p className="text-xs text-neutral-400 font-medium flex items-center gap-1.5">
+              <MessageSquareOff size={14} /> Host has disabled chat
+            </p>
+          </div>
+        )}
         <div className="relative flex items-center">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Chat with others watching..."
-            className="w-full bg-neutral-800 border border-white/10 rounded-full pl-4 pr-12 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500/50 transition-colors"
+            onFocus={() => { if (socket && !socket.connected) socket.connect(); }}
+            disabled={!chatEnabled && !isHost}
+            placeholder={partyId ? "Chat with party members..." : "Chat with others watching..."}
+            className="w-full bg-neutral-800 border border-white/10 rounded-full pl-4 pr-12 py-2.5 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500/50 transition-colors disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={!input.trim()}
+            disabled={!input.trim() || (!chatEnabled && !isHost)}
             className="absolute right-1.5 p-1.5 bg-rose-500 text-white rounded-full hover:bg-rose-600 disabled:opacity-50 disabled:hover:bg-rose-500 transition-colors"
           >
             <Send size={16} className="-ml-0.5 mt-0.5" />

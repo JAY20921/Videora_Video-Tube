@@ -1,9 +1,8 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { uploadVideo } from "../api/videos";
+import { uploadVideo, getVideoStatus } from "../api/videos";
 import { useToast } from "./ToastProvider";
 import Loading from "./Loading";
-import { getVideoById } from "../api/videos";
 import { UploadCloud, Image as ImageIcon, Video as VideoIcon, X, CheckCircle2, Film, Loader2 } from "lucide-react";
 
 export default function UploadForm() {
@@ -21,26 +20,27 @@ export default function UploadForm() {
   const pollProcessing = async (videoId) => {
     setStatus("processing");
     const start = Date.now();
-    const timeout = 1000 * 60 * 5; // 5 minutes max
+    const timeout = 1000 * 60 * 10; // 10 minutes max
     while (Date.now() - start < timeout) {
       try {
-        const res = await getVideoById(videoId);
-        const v = res?.video ?? res?.data ?? res;
-        // backend may provide status or processing flag — try common fields
-        if (v?.status && v.status !== "processing") {
-          setStatus(v.status);
-          return v;
-        }
-        if (v?.processed || v?.isProcessed || v?.ready) {
+        const data = await getVideoStatus(videoId);
+        const p = data?.progress || 0;
+        setProgress(p);
+
+        if (data?.status === "ready") {
           setStatus("done");
-          return v;
+          return data;
+        }
+        if (data?.status === "failed") {
+          setStatus("failed");
+          return null;
         }
       } catch (e) {
         console.warn("Polling error", e);
       }
       // wait before next poll
       // eslint-disable-next-line no-await-in-loop
-      await new Promise((r) => setTimeout(r, 2500));
+      await new Promise((r) => setTimeout(r, 3000));
     }
     setStatus("timeout");
     return null;
@@ -269,10 +269,20 @@ export default function UploadForm() {
               >
                 <div className="flex justify-between items-end mb-2">
                   <div>
-                    <p className="text-sm font-medium text-white">{status === 'processing' ? 'Processing Video...' : 'Uploading...'}</p>
+                    <p className="text-sm font-medium text-white">
+                      {status === 'processing'
+                        ? (progress <= 0 ? 'Queued for processing…'
+                          : progress < 15 ? 'Downloading source…'
+                          : progress < 60 ? 'Transcoding video…'
+                          : progress < 70 ? 'Generating spritesheet…'
+                          : progress < 90 ? 'Uploading HLS segments…'
+                          : progress < 100 ? 'Finalizing…'
+                          : 'Complete!')
+                        : 'Uploading…'}
+                    </p>
                     <p className="text-xs text-neutral-400">{videoFile?.name}</p>
                   </div>
-                  <span className="text-rose-400 font-bold">{progress}%</span>
+                  <span className="text-rose-400 font-bold tabular-nums">{Math.round(progress)}%</span>
                 </div>
                 <div className="w-full bg-neutral-800 rounded-full h-3 overflow-hidden shadow-inner">
                   <div

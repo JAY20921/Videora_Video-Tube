@@ -7,10 +7,13 @@
   "scripts": {
     "dev": "nodemon -r dotenv/config src/index.js",
     "start": "node src/index.js",
+    "start:unified": "node src/index.js",
     "worker": "node -r dotenv/config src/worker.js",
     "worker:dev": "nodemon -r dotenv/config src/worker.js",
     "ai-worker": "node -r dotenv/config src/aiWorker.js",
-    "ai-worker:dev": "nodemon -r dotenv/config src/aiWorker.js"
+    "ai-worker:dev": "nodemon -r dotenv/config src/aiWorker.js",
+    "analytics-worker": "node -r dotenv/config src/analyticsWorker.js",
+    "analytics-worker:dev": "nodemon -r dotenv/config src/analyticsWorker.js"
   },
   "keywords": [
     "javascript",

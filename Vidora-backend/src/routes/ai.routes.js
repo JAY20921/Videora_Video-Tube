@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { askQuestion, getTranscript, getAiStatus } from "../controllers/ai.controller.js";
+import { askQuestion, getTranscript, getAiStatus, generateSkillTree } from "../controllers/ai.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 import { generalLimiter } from "../middlewares/rateLimiter.middleware.js";
 
@@ -16,5 +16,8 @@ router.route("/ask").post(generalLimiter, askQuestion);
 
 // Get full transcript with chapters and concepts
 router.route("/transcript/:videoId").get(getTranscript);
+
+// Generate Dynamic Skill-Tree Playlist
+router.route("/skill-tree").post(generalLimiter, generateSkillTree);
 
 export default router;

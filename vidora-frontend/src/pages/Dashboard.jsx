@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { getChannelStats, getChannelVideos } from "../api/dashboard";
-import { Eye, Users, ThumbsUp, Film, BarChart3 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Eye, Users, ThumbsUp, Film, BarChart3, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import Loading from "../components/Loading";
+import { deleteVideo } from "../api/videos";
+import { useToast } from "../components/ToastProvider";
+import { getVideoAnalytics } from "../api/analytics";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 function StatCard({ icon: Icon, label, value, color }) {
   return (
@@ -34,6 +38,38 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [expandedVideoId, setExpandedVideoId] = useState(null);
+  const [retentionData, setRetentionData] = useState([]);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const push = useToast();
+
+  const handleDelete = async (videoId) => {
+    if (!window.confirm("Are you sure you want to delete this video? This action cannot be undone.")) return;
+    try {
+      await deleteVideo(videoId);
+      setVideos((prev) => prev.filter((v) => v._id !== videoId));
+      setStats((prev) => prev ? { ...prev, totalVideos: prev.totalVideos - 1 } : prev);
+      push("Video deleted successfully", { type: "success" });
+    } catch (err) {
+      push(err.response?.data?.message || "Failed to delete video", { type: "error" });
+    }
+  };
+
+  const toggleExpand = async (videoId) => {
+    if (expandedVideoId === videoId) {
+      setExpandedVideoId(null);
+      return;
+    }
+    setExpandedVideoId(videoId);
+    setLoadingAnalytics(true);
+    const data = await getVideoAnalytics(videoId);
+    if (data?.retentionData) {
+      setRetentionData(data.retentionData);
+    } else {
+      setRetentionData([]);
+    }
+    setLoadingAnalytics(false);
+  };
 
   useEffect(() => {
     Promise.all([getChannelStats(), getChannelVideos()])
@@ -84,36 +120,90 @@ export default function Dashboard() {
                   <th className="px-4 py-3 font-medium">Views</th>
                   <th className="px-4 py-3 font-medium hidden md:table-cell">Status</th>
                   <th className="px-4 py-3 font-medium hidden md:table-cell">Date</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {videos.map((v) => (
-                  <tr key={v._id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition">
-                    <td className="px-4 py-3">
-                      <Link to={`/video/${v._id}`} className="flex items-center gap-3 group">
-                        <div className="w-24 h-14 rounded-lg overflow-hidden bg-neutral-800 flex-shrink-0">
-                          {v.thumbnail && (
-                            <img src={v.thumbnail} alt="" className="w-full h-full object-cover" />
-                          )}
+                  <React.Fragment key={v._id}>
+                    <tr onClick={() => toggleExpand(v._id)} className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition cursor-pointer">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3 group">
+                          <div className="w-24 h-14 rounded-lg overflow-hidden bg-neutral-800 flex-shrink-0">
+                            {v.thumbnail && (
+                              <img src={v.thumbnail} alt="" className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                          <span className="text-white font-medium group-hover:text-rose-400 transition line-clamp-2">
+                            {v.title}
+                          </span>
                         </div>
-                        <span className="text-white font-medium group-hover:text-rose-400 transition line-clamp-2">
-                          {v.title}
+                      </td>
+                      <td className="px-4 py-3 text-neutral-400 hidden sm:table-cell">{formatDuration(v.duration)}</td>
+                      <td className="px-4 py-3 text-neutral-300">{v.views?.toLocaleString() || 0}</td>
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          v.isPublished ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
+                        }`}>
+                          {v.isPublished ? "Published" : "Draft"}
                         </span>
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-neutral-400 hidden sm:table-cell">{formatDuration(v.duration)}</td>
-                    <td className="px-4 py-3 text-neutral-300">{v.views?.toLocaleString() || 0}</td>
-                    <td className="px-4 py-3 hidden md:table-cell">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        v.isPublished ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"
-                      }`}>
-                        {v.isPublished ? "Published" : "Draft"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-neutral-500 text-xs hidden md:table-cell">
-                      {new Date(v.createdAt).toLocaleDateString()}
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="px-4 py-3 text-neutral-500 text-xs hidden md:table-cell">
+                        {new Date(v.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(v._id); }}
+                          className="p-2 bg-red-600/10 text-red-400 hover:bg-red-600/30 rounded-lg transition inline-flex items-center justify-center"
+                          title="Delete Video"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                    <AnimatePresence>
+                      {expandedVideoId === v._id && (
+                        <motion.tr
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="bg-neutral-900/50 border-b border-neutral-800/50"
+                        >
+                          <td colSpan="6" className="p-4">
+                            <h4 className="text-sm font-semibold mb-4 text-neutral-300">Audience Retention (Heartbeats)</h4>
+                            {loadingAnalytics ? (
+                              <div className="text-xs text-neutral-500 h-40 flex items-center justify-center">Loading analytics...</div>
+                            ) : retentionData.length > 0 ? (
+                              <div className="h-48 w-full pr-4">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart data={retentionData}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                    <XAxis 
+                                      dataKey="time" 
+                                      tickFormatter={(tick) => formatDuration(tick)}
+                                      stroke="#ffffff40" 
+                                      fontSize={12} 
+                                      tickMargin={10} 
+                                    />
+                                    <YAxis stroke="#ffffff40" fontSize={12} tickMargin={10} />
+                                    <Tooltip 
+                                      contentStyle={{ backgroundColor: "#171717", border: "1px solid #ffffff15", borderRadius: "8px" }}
+                                      labelFormatter={(label) => `Time: ${formatDuration(label)}`}
+                                    />
+                                    <Line type="monotone" dataKey="views" stroke="#f43f5e" strokeWidth={2} dot={false} activeDot={{ r: 6, fill: "#f43f5e" }} />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-neutral-500 h-24 flex items-center justify-center bg-neutral-900 rounded-lg border border-white/5">
+                                Not enough telemetry data yet.
+                              </div>
+                            )}
+                          </td>
+                        </motion.tr>
+                      )}
+                    </AnimatePresence>
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>

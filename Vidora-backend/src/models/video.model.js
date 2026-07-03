@@ -83,6 +83,24 @@ const videoSchema = new Schema(
       enum: ["pending", "processing", "ready", "failed", "skipped"],
       default: "pending",
     },
+    /**
+     * Transcoding progress percentage (0–100).
+     * Written by the worker after each processing step so the frontend
+     * can display real-time progress that persists across page refreshes.
+     */
+    progress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+    /**
+     * Timestamp of the last retranscode request.
+     * Used to enforce a 10-minute cooldown between retranscode attempts.
+     */
+    lastTranscodeAt: {
+      type: Date,
+    },
   },
   { timestamps: true }
 );

@@ -20,8 +20,52 @@ export const initSocket = (server) => {
   const subClient = pubClient.duplicate();
   io.adapter(createAdapter(pubClient, subClient));
 
+  // Watch Parties State (In-memory for now, move to Redis for multi-server)
+  const watchparties = new Map();
+
   io.on("connection", (socket) => {
     logger.info({ socketId: socket.id }, "Client connected to WebSocket");
+
+    // Create Watch Party
+    socket.on("create-watchparty", ({ videoId }, callback) => {
+      const partyId = Math.random().toString(36).substring(2, 9);
+      watchparties.set(partyId, { hostId: socket.id, videoId, chatEnabled: true });
+      socket.join(`party-${partyId}`);
+      logger.info({ socketId: socket.id, partyId }, "Watchparty created");
+      if (callback) callback({ partyId });
+    });
+
+    // Join Watch Party
+    socket.on("join-watchparty", ({ partyId }, callback) => {
+      const party = watchparties.get(partyId);
+      if (!party) {
+        if (callback) callback({ error: "Watchparty not found" });
+        return;
+      }
+      socket.join(`party-${partyId}`);
+      logger.info({ socketId: socket.id, partyId }, "Client joined watchparty");
+      if (callback) callback({ success: true, videoId: party.videoId, chatEnabled: party.chatEnabled });
+    });
+
+    // Leave Watch Party
+    socket.on("leave-watchparty", ({ partyId }) => {
+      socket.leave(`party-${partyId}`);
+      const party = watchparties.get(partyId);
+      if (party && party.hostId === socket.id) {
+        // Host left, end party
+        io.to(`party-${partyId}`).emit("watchparty-ended");
+        watchparties.delete(partyId);
+      }
+    });
+
+    // Toggle Chat
+    socket.on("toggle-chat", ({ partyId, enabled }) => {
+      const party = watchparties.get(partyId);
+      if (party && party.hostId === socket.id) {
+        party.chatEnabled = enabled;
+        io.to(`party-${partyId}`).emit("chat-toggled", enabled);
+      }
+    });
 
     // Watch Party / Video Rooms
     socket.on("join-video-room", (videoId) => {
@@ -35,28 +79,60 @@ export const initSocket = (server) => {
     });
 
     // Real-time Collaboration Events (Host -> Viewers)
-    socket.on("sync-seek", ({ videoId, time }) => {
-      socket.to(`video-${videoId}`).emit("sync-seek", time);
+    socket.on("sync-seek", ({ videoId, partyId, time }) => {
+      if (partyId) {
+        const party = watchparties.get(partyId);
+        if (party && party.hostId === socket.id) {
+          socket.to(`party-${partyId}`).emit("sync-seek", time);
+        }
+      }
     });
 
-    socket.on("sync-play", ({ videoId }) => {
-      socket.to(`video-${videoId}`).emit("sync-play");
+    socket.on("sync-play", ({ videoId, partyId, time }) => {
+      if (partyId) {
+        const party = watchparties.get(partyId);
+        if (party && party.hostId === socket.id) {
+          socket.to(`party-${partyId}`).emit("sync-play", time);
+        }
+      }
     });
 
-    socket.on("sync-pause", ({ videoId }) => {
-      socket.to(`video-${videoId}`).emit("sync-pause");
+    socket.on("sync-pause", ({ videoId, partyId }) => {
+      if (partyId) {
+        const party = watchparties.get(partyId);
+        if (party && party.hostId === socket.id) {
+          socket.to(`party-${partyId}`).emit("sync-pause");
+        }
+      }
     });
 
     // Chat Messages
-    socket.on("send-chat", ({ videoId, message, user }) => {
-      // Broadcast to room
-      io.to(`video-${videoId}`).emit("new-chat", { message, user, timestamp: new Date() });
+    socket.on("send-chat", ({ videoId, partyId, message, user }) => {
+      if (partyId) {
+        const party = watchparties.get(partyId);
+        if (!party) return;
+        if (!party.chatEnabled && party.hostId !== socket.id) {
+          socket.emit("chat-error", "Host has disabled chat.");
+          return;
+        }
+        socket.to(`party-${partyId}`).emit("new-chat", { message, user, timestamp: new Date() });
+      } else {
+        // Broadcast to video room except sender
+        socket.to(`video-${videoId}`).emit("new-chat", { message, user, timestamp: new Date() });
+      }
       
       // TODO: Buffer messages in Redis and flush to MongoDB periodically
     });
 
     socket.on("disconnect", () => {
       logger.info({ socketId: socket.id }, "Client disconnected from WebSocket");
+      for (const [partyId, party] of watchparties.entries()) {
+        if (party.hostId === socket.id) {
+          io.to(`party-${partyId}`).emit("watchparty-ended");
+          watchparties.delete(partyId);
+          logger.info({ partyId }, "Watchparty ended due to host disconnect");
+        }
+      }
     });
   });
 

@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Trash2 } from "lucide-react";
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -21,14 +22,23 @@ function formatDuration(s) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export default function VideoCard({ video }) {
+export default function VideoCard({ video, onDelete }) {
   return (
     <motion.article
       whileHover={{ y: -4, scale: 1.02 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="bg-neutral-900/50 rounded-xl overflow-hidden border border-neutral-800/50 hover:border-neutral-700 transition-colors group"
+      className="relative bg-neutral-900/50 rounded-xl overflow-hidden border border-neutral-800/50 hover:border-neutral-700 transition-colors group"
     >
-      <Link to={`/video/${video._id}`} className="block">
+      {onDelete && (
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(video._id); }}
+          className="absolute top-2 right-2 bg-red-600/90 hover:bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-lg"
+          title="Delete Video"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
+      <Link to={`/video/${video._id}`} className="block relative z-10">
         {/* Thumbnail */}
         <div className="relative aspect-video bg-neutral-800 overflow-hidden">
           <img

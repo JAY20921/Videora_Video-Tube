@@ -4,11 +4,18 @@ import { app } from "./app.js";
 import { logger } from "./utils/logger.js";
 import { config } from "./config/index.js";
 import { initSocket } from "./socket.js";
+import { startWorkers, stopWorkers } from "./workers.js";
 
 let server;
 
-const gracefulShutdown = (signal) => {
+const gracefulShutdown = async (signal) => {
   logger.info(`${signal} received — shutting down gracefully`);
+
+  // Stop BullMQ workers first (flush analytics buffer, close connections)
+  await stopWorkers().catch((err) =>
+    logger.error({ err }, "Error stopping workers")
+  );
+
   if (server) {
     server.close(() => {
       logger.info("HTTP server closed");
@@ -25,13 +32,17 @@ const gracefulShutdown = (signal) => {
 };
 
 connectDB()
-  .then(() => {
+  .then(async () => {
     server = app.listen(config.port, "0.0.0.0", () => {
       logger.info(`Server running on port ${config.port} [${config.nodeEnv}]`);
     });
     
     // Initialize Socket.IO
     initSocket(server);
+
+    // Start all BullMQ workers in-process (video, AI, analytics)
+    // This eliminates the need for separate worker deployments
+    await startWorkers();
 
     server.on("error", (error) => {
       logger.error({ err: error }, "Server error");

@@ -23,7 +23,7 @@ export const SocketProvider = ({ children }) => {
     
     const newSocket = io(backendUrl, {
       withCredentials: true,
-      autoConnect: true,
+      autoConnect: false,
     });
 
     setSocket(newSocket);

@@ -15,15 +15,21 @@ let _embeddingClient = null;
 
 function getEmbeddingClient() {
   if (!_embeddingClient) {
-    // Try OpenAI API key first (for embeddings), then fall back to Groq
-    const apiKey = process.env.OPENAI_API_KEY || config.groq.apiKey;
-    const baseURL = process.env.OPENAI_API_KEY
-      ? "https://api.openai.com/v1"
-      : config.groq.baseUrl;
+    // Groq does NOT support embeddings — only use OpenAI if OPENAI_API_KEY is set
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      logger.warn(
+        "OPENAI_API_KEY not set — vector embeddings unavailable. " +
+        "Groq does not support embeddings. " +
+        "The AI Tutor will use transcript text search as a fallback."
+      );
+      return null;
+    }
 
-    if (!apiKey) return null;
-
-    _embeddingClient = new OpenAI({ apiKey, baseURL });
+    _embeddingClient = new OpenAI({
+      apiKey,
+      baseURL: "https://api.openai.com/v1",
+    });
   }
   return _embeddingClient;
 }

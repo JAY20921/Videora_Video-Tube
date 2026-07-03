@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { Compass, Upload, User, History, BarChart3, Heart, Users, Home } from "lucide-react";
+import { Compass, Upload, User, History, BarChart3, Heart, Users, Home, BookOpen } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 
@@ -47,6 +47,7 @@ export default function SideNav() {
         <div className="text-[10px] uppercase tracking-wider text-neutral-600 font-semibold px-3 mb-2">Main</div>
         {navItem("/", Home, "Home", 0)}
         {navItem("/explore", Compass, "Explore", 0.05)}
+        {navItem("/study-together", BookOpen, "Study Together", 0.08)}
 
         {user && (
           <>
