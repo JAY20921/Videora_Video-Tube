@@ -47,6 +47,10 @@ export const config = {
     embeddingModel: "text-embedding-3-small",
   },
 
+  huggingFace: {
+    token: process.env.HF_TOKEN || "",
+  },
+
   qdrant: {
     url: process.env.QDRANT_URL || "http://localhost:6333",
     apiKey: process.env.QDRANT_API_KEY || "",

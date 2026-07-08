@@ -35,7 +35,7 @@ export const ingestEvent = asyncHandler(async (req, res) => {
 export const getVideoAnalytics = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
-  // Aggregate heartbeats into 10-second buckets for retention curve
+  // Aggregate heartbeats into daily buckets for Views over Time
   const retentionData = await ViewEvent.aggregate([
     { 
       $match: { 
@@ -45,16 +45,14 @@ export const getVideoAnalytics = asyncHandler(async (req, res) => {
     },
     {
       $group: {
-        _id: {
-           bucket: { $subtract: ["$timestamp", { $mod: ["$timestamp", 10] }] }
-        },
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
         count: { $sum: 1 }
       }
     },
-    { $sort: { "_id.bucket": 1 } },
+    { $sort: { "_id": 1 } },
     {
       $project: {
-         time: "$_id.bucket",
+         date: "$_id",
          views: "$count",
          _id: 0
       }

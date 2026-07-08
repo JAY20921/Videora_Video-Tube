@@ -21,11 +21,11 @@ const gracefulShutdown = async (signal) => {
       logger.info("HTTP server closed");
       process.exit(0);
     });
-    // Force shutdown after 10 seconds if connections don't close
+    // Force shutdown almost immediately if WebSockets/Keep-Alives are hanging
     setTimeout(() => {
-      logger.error("Forced shutdown after timeout");
-      process.exit(1);
-    }, 10_000);
+      logger.info("Forced shutdown");
+      process.exit(0);
+    }, 1500); // 1.5 seconds is plenty for a local backend to flush
   } else {
     process.exit(0);
   }

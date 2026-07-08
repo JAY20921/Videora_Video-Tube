@@ -111,7 +111,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
     );
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Redis connection timeout")), 2000)
+      setTimeout(() => reject(new Error("Redis connection timeout")), 10000)
     );
 
     await Promise.race([enqueuePromise, timeoutPromise]);
@@ -342,11 +342,11 @@ const retranscodeVideo = asyncHandler(async (req, res) => {
         title: video.title,
         duration: Math.round(video.duration || 0)
       },
-      { jobId: `transcode-${video._id}` }
+      { jobId: `transcode-${video._id}-${Date.now()}` }
     );
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Redis connection timeout")), 2000)
+      setTimeout(() => reject(new Error("Redis connection timeout")), 10000)
     );
 
     await Promise.race([enqueuePromise, timeoutPromise]);

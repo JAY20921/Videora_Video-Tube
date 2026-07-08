@@ -24,7 +24,7 @@ import { getAiQueue } from "./queues/aiQueue.js";
 import { transcribeVideo } from "./services/transcription.service.js";
 import { chunkTranscript } from "./services/chunking.service.js";
 import { embedTexts } from "./services/embedding.service.js";
-import { storeChunks } from "./services/vectorStore.service.js";
+import { storeChunks, deleteVideoVectors } from "./services/vectorStore.service.js";
 import { extractConcepts, generateChapters } from "./services/knowledgeGraph.service.js";
 import { ensureCollection } from "./config/qdrant.js";
 import { exec } from "child_process";
@@ -166,10 +166,12 @@ async function processVideoJob(job) {
 
     // Upload HLS
     // Upload HLS in parallel batches to speed things up
+    const hlsFiles = await fs.readdir(hlsDir);
     logger.info({ videoId, totalFiles: hlsFiles.length }, "Uploading HLS segments to Cloudinary...");
     const uploadedFiles = {};
     const BATCH_SIZE = 5; // Upload 5 segments concurrently
 
+    const totalBatches = Math.ceil(hlsFiles.length / BATCH_SIZE);
     for (let i = 0; i < hlsFiles.length; i += BATCH_SIZE) {
       const batch = hlsFiles.slice(i, i + BATCH_SIZE);
       const batchPromises = batch.map(async (file) => {
@@ -182,9 +184,23 @@ async function processVideoJob(job) {
       for (const res of results) {
         if (res.url) uploadedFiles[res.file] = res.url;
       }
+      
+      // Update progress proportionally between 70% and 90% to prevent BullMQ from marking the job as stalled
+      const currentBatch = Math.floor(i / BATCH_SIZE) + 1;
+      const currentProgress = 70 + Math.floor((currentBatch / totalBatches) * 20);
+      try {
+        await job.updateProgress(currentProgress);
+        await Video.findByIdAndUpdate(videoId, { progress: currentProgress });
+      } catch (err) {
+        // Ignore progress update failures
+      }
     }
-    job.updateProgress(90);
-    await Video.findByIdAndUpdate(videoId, { progress: 90 });
+    
+    // Ensure we hit exactly 90 when the loop finishes
+    try {
+      await job.updateProgress(90);
+      await Video.findByIdAndUpdate(videoId, { progress: 90 });
+    } catch(err) {}
 
     let masterUrl = uploadedFiles["master.m3u8"];
     if (!masterUrl) {
@@ -208,7 +224,7 @@ async function processVideoJob(job) {
       await getAiQueue().add(
         "ai-process",
         { videoId, rawUrl, title, duration: job.data.duration || 0 },
-        { jobId: `ai-${videoId}` }
+        { jobId: `ai-${videoId}-${Date.now()}` }
       );
       logger.info({ videoId }, "AI processing job enqueued");
     } catch (aiErr) {
@@ -302,6 +318,9 @@ async function processAiJob(job) {
     const embeddings = await embedTexts(chunkTexts);
     job.updateProgress(60);
 
+    logger.info({ videoId }, "Clearing old vectors from Qdrant...");
+    await deleteVideoVectors(videoId);
+
     logger.info({ videoId }, "Storing vectors in Qdrant...");
     const pointIds = await storeChunks(videoId, chunks, embeddings);
 
@@ -370,7 +389,7 @@ async function flushBuffer() {
     // Dynamic import to avoid circular dependency issues at module load time
     const { ViewEvent } = await import("./models/viewEvent.model.js");
     await ViewEvent.insertMany(eventsToInsert, { ordered: false });
-    logger.info(`Inserted ${eventsToInsert.length} analytics events`);
+    logger.debug(`Inserted ${eventsToInsert.length} analytics events`);
   } catch (error) {
     logger.error({ err: error.message }, "Failed to bulk insert analytics events");
   }
@@ -416,6 +435,7 @@ export async function startWorkers() {
   const videoWorker = new Worker("video-processing", processVideoJob, {
     connection: redisConfig,
     concurrency: 1, // FFmpeg is CPU-heavy — one at a time
+    skipConfigCheck: true, // Suppress Redis Cloud eviction policy warning
   });
 
   videoWorker.on("completed", (job, result) => {
@@ -434,6 +454,7 @@ export async function startWorkers() {
   const aiWorker = new Worker("ai-processing", processAiJob, {
     connection: redisConfig,
     concurrency: 1, // API rate limits — one at a time
+    skipConfigCheck: true,
   });
 
   aiWorker.on("completed", (job, result) => {
@@ -452,6 +473,7 @@ export async function startWorkers() {
   const analyticsWorker = new Worker("analytics-jobs", processAnalyticsJob, {
     connection: redisConfig,
     concurrency: 50,
+    skipConfigCheck: true,
   });
 
   analyticsWorker.on("failed", (job, err) => {

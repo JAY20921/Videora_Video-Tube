@@ -16,15 +16,25 @@ export const saveProgress = async ({ videoId, progressSeconds }) => {
  * aren't sent, this is best-effort (the last heartbeat already saved the position).
  */
 export const saveProgressBeacon = ({ videoId, progressSeconds }) => {
-  if (typeof navigator?.sendBeacon === "function") {
-    const blob = new Blob(
-      [JSON.stringify({ videoId, progressSeconds })],
-      { type: "application/json" }
-    );
-    navigator.sendBeacon(
-      `${api.defaults.baseURL}/watch-progress`,
-      blob
-    );
+  const token = localStorage.getItem("accessToken");
+  if (!token) return; // Don't attempt to save if not logged in
+
+  const url = `${api.defaults.baseURL}/watch-progress`;
+  const body = JSON.stringify({ videoId, progressSeconds });
+
+  // Use fetch with keepalive instead of sendBeacon so we can attach custom Auth headers
+  try {
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body,
+      keepalive: true,
+    }).catch(() => {});
+  } catch (error) {
+    // Ignore fetch errors during unmount
   }
 };
 

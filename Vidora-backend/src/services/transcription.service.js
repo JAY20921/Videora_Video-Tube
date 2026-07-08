@@ -29,13 +29,13 @@ async function extractAudio(videoPath, outputPath) {
   const cmd = [
     `"${ffmpeg}"`,
     `-i "${videoPath}"`,
-    `-threads 1`, // Locked to 1 thread to prevent OOM in production
-    `-vn`,                    // no video
-    `-acodec libmp3lame`,     // MP3 codec
-    `-ar 16000`,              // 16kHz sample rate (Whisper optimal)
-    `-ac 1`,                  // mono
-    `-b:a 64k`,               // 64kbps bitrate (small file)
-    `-y`,                     // overwrite
+    `-threads 1`,
+    `-vn`,
+    `-acodec libmp3lame`,
+    `-ar 16000`,
+    `-ac 1`,
+    `-b:a 128k`, // Increased to 128kbps for better vocal clarity over music
+    `-y`,
     `"${outputPath}"`,
   ].join(" ");
 
@@ -45,21 +45,15 @@ async function extractAudio(videoPath, outputPath) {
 
 /**
  * Transcribe a video file using Groq Whisper Large V3 Turbo.
- *
- * @param {string} videoPath - Local path to the downloaded video file
- * @param {string} workDir - Temporary working directory for audio extraction
- * @returns {Promise<{ segments: Array<{start: number, end: number, text: string}>, fullText: string, language: string }>}
  */
 export async function transcribeVideo(videoPath, workDir) {
   const groq = getGroqClient();
   if (!groq) throw new Error("Groq client not available — GROQ_API_KEY not set");
 
-  // 1. Extract and compress audio
   const audioPath = path.join(workDir, "audio.mp3");
   logger.info("Extracting audio from video...");
   await extractAudio(videoPath, audioPath);
 
-  // 2. Check file size (Groq limit: 25MB)
   const stat = await fs.stat(audioPath);
   if (stat.size > 25 * 1024 * 1024) {
     throw new Error(`Audio file too large (${Math.round(stat.size / 1024 / 1024)}MB) — max 25MB`);
@@ -67,12 +61,10 @@ export async function transcribeVideo(videoPath, workDir) {
 
   logger.info({ audioSize: `${Math.round(stat.size / 1024)}KB` }, "Sending audio to Whisper...");
 
-  // 3. Send to Groq Whisper
   const transcription = await groq.audio.transcriptions.create({
     file: createReadStream(audioPath),
     model: config.groq.whisperModel,
-    response_format: "verbose_json",  // includes timestamped segments
-    language: "en",
+    response_format: "verbose_json",
     timestamp_granularities: ["segment"],
   });
 

@@ -170,7 +170,7 @@ export default function Dashboard() {
                           className="bg-neutral-900/50 border-b border-neutral-800/50"
                         >
                           <td colSpan="6" className="p-4">
-                            <h4 className="text-sm font-semibold mb-4 text-neutral-300">Audience Retention (Heartbeats)</h4>
+                            <h4 className="text-sm font-semibold mb-4 text-neutral-300">Views Over Time</h4>
                             {loadingAnalytics ? (
                               <div className="text-xs text-neutral-500 h-40 flex items-center justify-center">Loading analytics...</div>
                             ) : retentionData.length > 0 ? (
@@ -179,8 +179,8 @@ export default function Dashboard() {
                                   <LineChart data={retentionData}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                                     <XAxis 
-                                      dataKey="time" 
-                                      tickFormatter={(tick) => formatDuration(tick)}
+                                      dataKey="date" 
+                                      tickFormatter={(tick) => new Date(tick).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                       stroke="#ffffff40" 
                                       fontSize={12} 
                                       tickMargin={10} 
@@ -188,9 +188,9 @@ export default function Dashboard() {
                                     <YAxis stroke="#ffffff40" fontSize={12} tickMargin={10} />
                                     <Tooltip 
                                       contentStyle={{ backgroundColor: "#171717", border: "1px solid #ffffff15", borderRadius: "8px" }}
-                                      labelFormatter={(label) => `Time: ${formatDuration(label)}`}
+                                      labelFormatter={(label) => new Date(label).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
                                     />
-                                    <Line type="monotone" dataKey="views" stroke="#f43f5e" strokeWidth={2} dot={false} activeDot={{ r: 6, fill: "#f43f5e" }} />
+                                    <Line type="monotone" dataKey="views" stroke="#f43f5e" strokeWidth={2} dot={{ r: 4, fill: "#f43f5e" }} activeDot={{ r: 6, fill: "#f43f5e" }} />
                                   </LineChart>
                                 </ResponsiveContainer>
                               </div>

@@ -52,13 +52,17 @@ export const instantSearch = asyncHandler(async (req, res) => {
     logger.warn({ err: err.message }, "Meilisearch search failed — falling back to MongoDB");
   }
 
-  // ── Fallback: MongoDB $text search ────────────────────────────────────────
-  const filter = { isPublished: true, $text: { $search: q.trim() } };
+  // ── Fallback: MongoDB $regex search ────────────────────────────────────────
+  const regexQuery = { $regex: q.trim(), $options: "i" };
+  const filter = { 
+    isPublished: true, 
+    title: regexQuery
+  };
 
   const startMs = Date.now();
   const videos = await Video.find(filter)
     .populate({ path: "owner", select: "fullName username avatar" })
-    .sort({ score: { $meta: "textScore" } })
+    .sort({ createdAt: -1 }) // Sort by newest since regex doesn't have a score
     .skip(skip)
     .limit(perPage)
     .lean();
