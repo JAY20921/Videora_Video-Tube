@@ -17,6 +17,10 @@ COPY . .
 # Create tmp directories for workers
 RUN mkdir -p tmp_video_processing tmp_ai_processing
 
+# Production defaults
+ENV NODE_ENV=production
+ENV NODE_OPTIONS="--max-old-space-size=256"
+
 # Expose main API port
 EXPOSE 8000
 

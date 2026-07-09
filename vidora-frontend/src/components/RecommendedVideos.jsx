@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import VideoCard from './VideoCard';
-import { fetchVideos } from '../api/videos';
+import { fetchRecommendations } from '../api/videos';
 
 export default function RecommendedVideos({ currentVideoId, limit = 6 }) {
   const [videos, setVideos] = useState([]);
@@ -9,12 +9,9 @@ export default function RecommendedVideos({ currentVideoId, limit = 6 }) {
   useEffect(() => {
     let mounted = true;
     setLoading(true);
-    fetchVideos({ limit: 24 }).then((res) => {
-      // res may be an array or object
-      const list = Array.isArray(res) ? res : res?.videos || res?.data || [];
-      // filter out current video and take `limit`
-      const filtered = list.filter((v) => v._id !== currentVideoId).slice(0, limit);
-      if (mounted) setVideos(filtered);
+    fetchRecommendations(currentVideoId, limit).then((res) => {
+      const list = Array.isArray(res) ? res : [];
+      if (mounted) setVideos(list);
     }).catch((e) => {
       console.error('Failed to fetch recommended videos', e);
     }).finally(() => mounted && setLoading(false));

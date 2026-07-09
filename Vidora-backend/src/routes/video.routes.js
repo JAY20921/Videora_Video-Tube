@@ -9,6 +9,7 @@ import {
   updateVideo,
   incrementVideoView,
   retranscodeVideo,
+  getRecommendations,
 } from "../controllers/video.controller.js";
 import { verifyJWT, optionalVerifyJWT } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
@@ -27,6 +28,9 @@ router.route("/").get(getAllVideos);
 
 // Get a single video by ID — public so anyone can watch, but optional auth for sub status
 router.route("/:videoId").get(optionalVerifyJWT, getVideoById);
+
+// Get recommendations for a video
+router.route("/:id/recommendations").get(getRecommendations);
 
 // ─── Authenticated routes ─────────────────────────────────────────────────────
 router.use(verifyJWT);

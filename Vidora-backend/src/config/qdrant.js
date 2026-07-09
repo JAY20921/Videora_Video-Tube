@@ -12,8 +12,8 @@ let _client = null;
 let _collectionReady = false;
 
 // Embedding dimension — must match the model used in embedding.service.js
-// Groq/OpenAI text-embedding-3-small = 1536 dimensions
-export const VECTOR_SIZE = 1536;
+// Xenova all-MiniLM-L6-v2 = 384 dimensions
+export const VECTOR_SIZE = 384;
 
 /**
  * Get (or create) the Qdrant client singleton.
@@ -51,7 +51,21 @@ export async function ensureCollection() {
 
   try {
     const collections = await client.getCollections();
-    const exists = collections.collections.some((c) => c.name === name);
+    let exists = collections.collections.some((c) => c.name === name);
+
+    if (exists) {
+      try {
+        const info = await client.getCollection(name);
+        const currentSize = info.config?.params?.vectors?.size || info.params?.vectors?.size || 1536;
+        if (currentSize !== VECTOR_SIZE) {
+          logger.warn({ oldSize: currentSize, newSize: VECTOR_SIZE }, "Qdrant dimension mismatch! Recreating collection...");
+          await client.deleteCollection(name);
+          exists = false;
+        }
+      } catch (err) {
+        // Assume exists and let it fail gracefully on insert if wrong
+      }
+    }
 
     if (!exists) {
       await client.createCollection(name, {

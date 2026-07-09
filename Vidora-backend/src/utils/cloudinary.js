@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
 import fs from "fs";
+import path from "path";
 import { config } from "../config/index.js";
 import { logger } from "./logger.js";
 
@@ -21,14 +22,19 @@ export const uploadOnCloudinary = async (localFilePath, folder = "misc", resourc
 
     // upload_large automatically handles chunking and prevents timeouts for large videos
     const response = await new Promise((resolve, reject) => {
+      const uploadOptions = {
+        resource_type: resourceType,
+        folder: `vidora/${folder}`,
+        chunk_size: 6000000, // 6MB chunks
+      };
+
+      if (resourceType === "raw") {
+        uploadOptions.public_id = path.basename(localFilePath);
+      }
+
       cloudinary.uploader.upload_large(
         localFilePath,
-        {
-          resource_type: resourceType,
-          folder: `vidora/${folder}`,
-          chunk_size: 6000000, // 6MB chunks
-          ...(resourceType === "raw" ? { use_filename: true, unique_filename: false } : {}),
-        },
+        uploadOptions,
         (error, result) => {
           if (error) return reject(error);
           resolve(result);

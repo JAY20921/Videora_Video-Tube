@@ -3,10 +3,12 @@ import Hls from "hls.js";
 import {
   Play, Pause, Maximize, Minimize, Volume2, VolumeX, Volume1,
   PictureInPicture2, Settings, Loader2, SkipForward, SkipBack,
-  Check, ChevronRight, X
+  Check, ChevronRight, X, Users
 } from "lucide-react";
 import { useVideoProgress } from "../hooks/useVideoProgress";
 import { getVideoStatus } from "../api/videos";
+import { useSocket } from "../context/SocketContext";
+import { emitTelemetry } from "../api/analytics";
 
 /* ──────────────────────── helpers ──────────────────────── */
 const fmt = (s) => {
@@ -22,7 +24,8 @@ const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 /* ──────────────────────── component ──────────────────────── */
 const PlayerWrapper = forwardRef(function PlayerWrapper({
   videoId, url, hlsUrl, poster,
-  videoStatus: initialStatus, spritesheetUrl
+  videoStatus: initialStatus, spritesheetUrl, partyId, isHost,
+  processingProgress = 0
 }, ref) {
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -65,6 +68,79 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
   const [effectiveUrl, setEffectiveUrl] = useState(hlsUrl || url);
 
   const { resumeTimeRef } = useVideoProgress(videoId, videoRef);
+  const socket = useSocket();
+  const remoteAction = useRef(false);
+
+  /* ──── Analytics Telemetry ──── */
+  useEffect(() => {
+    if (!videoId) return;
+    
+    let interval;
+    if (playing) {
+      interval = setInterval(() => {
+        const v = videoRef.current;
+        if (v && !v.paused) {
+          emitTelemetry(videoId, "heartbeat", Math.round(v.currentTime));
+        }
+      }, 10000);
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [videoId, playing]);
+
+  /* ──── Socket Sync ──── */
+  useEffect(() => {
+    if (!socket || !videoId) return;
+
+    if (!partyId) {
+      socket.emit("join-video-room", videoId);
+      return () => {
+        socket.emit("leave-video-room", videoId);
+      };
+    }
+
+    const onSyncPlay = (time) => {
+      if (isHost) return;
+      const v = videoRef.current;
+      if (v && v.paused) {
+        remoteAction.current = true;
+        if (time !== undefined && Math.abs(v.currentTime - time) > 1) {
+          v.currentTime = time;
+        }
+        v.play().catch(() => {});
+      }
+    };
+
+    const onSyncPause = () => {
+      if (isHost) return;
+      const v = videoRef.current;
+      if (v && !v.paused) {
+        remoteAction.current = true;
+        v.pause();
+      }
+    };
+
+    const onSyncSeek = (time) => {
+      if (isHost) return;
+      const v = videoRef.current;
+      if (v && Math.abs(v.currentTime - time) > 1) {
+        remoteAction.current = true;
+        v.currentTime = time;
+      }
+    };
+
+    socket.on("sync-play", onSyncPlay);
+    socket.on("sync-pause", onSyncPause);
+    socket.on("sync-seek", onSyncSeek);
+
+    return () => {
+      socket.off("sync-play", onSyncPlay);
+      socket.off("sync-pause", onSyncPause);
+      socket.off("sync-seek", onSyncSeek);
+    };
+  }, [socket, videoId, partyId, isHost]);
 
   /* ──── Expose seekTo via ref for AiTutor ──── */
   useImperativeHandle(ref, () => ({
@@ -129,7 +205,17 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
       hls.attachMedia(v);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        const lvls = hls.levels.map((l, i) => ({ index: i, height: l.height, bitrate: l.bitrate, label: `${l.height}p` }));
+        const heightMap = new Map();
+        hls.levels.forEach((l, i) => {
+          const h = l.height || 0;
+          const label = h ? `${h}p` : 'Original';
+          const existing = heightMap.get(h);
+          if (!existing || l.bitrate > existing.bitrate) {
+            heightMap.set(h, { index: i, height: h, bitrate: l.bitrate, label });
+          }
+        });
+        const lvls = Array.from(heightMap.values()).sort((a, b) => b.height - a.height);
+        
         setQualities(lvls);
         setCurrentQuality(-1);
         onReady();
@@ -153,12 +239,16 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
 
   /* ──── Core handlers ──── */
   const togglePlay = useCallback(() => {
+    if (partyId && !isHost) return;
     const v = videoRef.current; if (!v) return;
     if (v.paused) v.play().catch(() => setError("Playback blocked."));
     else v.pause();
-  }, []);
+  }, [partyId, isHost]);
 
-  const seek = useCallback((t) => { const v = videoRef.current; if (v) v.currentTime = clamp(t, 0, duration); }, [duration]);
+  const seek = useCallback((t) => { 
+    if (partyId && !isHost) return;
+    const v = videoRef.current; if (v) v.currentTime = clamp(t, 0, duration); 
+  }, [duration, partyId, isHost]);
 
   const skip = useCallback((delta) => {
     seek((videoRef.current?.currentTime || 0) + delta);
@@ -247,6 +337,7 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
     setHoverTime((x / rect.width) * duration);
   };
   const handleBarClick = (e) => {
+    if (partyId && !isHost) return;
     const bar = progressBarRef.current; if (!bar) return;
     const rect = bar.getBoundingClientRect();
     const pct = clamp((e.clientX - rect.left) / rect.width, 0, 1);
@@ -272,16 +363,38 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
 
   /* ──── Processing / Failed states ──── */
   if (status === "processing") {
+    const progressLabel = processingProgress <= 0 ? "Starting…"
+      : processingProgress < 15 ? "Downloading source…"
+      : processingProgress < 60 ? "Transcoding video…"
+      : processingProgress < 70 ? "Generating spritesheet…"
+      : processingProgress < 90 ? "Uploading HLS segments…"
+      : processingProgress < 100 ? "Finalizing…"
+      : "Complete!";
     return (
       <div className="relative bg-black rounded-2xl overflow-hidden shadow-2xl aspect-video flex items-center justify-center">
         {poster && <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm" />}
-        <div className="relative z-10 flex flex-col items-center gap-5 text-white">
+        <div className="relative z-10 flex flex-col items-center gap-5 text-white w-full max-w-sm px-6">
           <div className="relative">
             <div className="absolute inset-0 rounded-full bg-rose-500/20 animate-ping" />
             <Loader2 size={52} className="animate-spin text-rose-500 relative z-10" />
           </div>
           <div className="text-lg font-semibold tracking-tight">Processing your video…</div>
-          <div className="text-sm text-neutral-400 max-w-xs text-center">Transcoding for adaptive streaming. This may take a few minutes.</div>
+          <div className="text-sm text-neutral-400 max-w-xs text-center">{progressLabel}</div>
+          {/* Progress bar */}
+          <div className="w-full">
+            <div className="flex justify-between text-xs text-neutral-500 mb-1.5">
+              <span>Progress</span>
+              <span className="text-rose-400 font-bold tabular-nums">{Math.round(processingProgress)}%</span>
+            </div>
+            <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-rose-600 to-rose-400 rounded-full transition-all duration-500 relative"
+                style={{ width: `${Math.min(processingProgress, 100)}%` }}
+              >
+                <div className="absolute inset-0 bg-white/20 animate-pulse" />
+              </div>
+            </div>
+          </div>
           <div className="flex items-center gap-2 text-xs text-neutral-500 bg-white/5 px-4 py-1.5 rounded-full border border-white/10">
             <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> Transcoding in progress
           </div>
@@ -322,8 +435,20 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
         }}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={(e) => setDuration(e.target.duration)}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+        onPlay={() => {
+          setPlaying(true);
+          if (!remoteAction.current && socket && partyId && isHost && videoRef.current) socket.emit("sync-play", { videoId, partyId, time: videoRef.current.currentTime });
+          remoteAction.current = false;
+        }}
+        onPause={() => {
+          setPlaying(false);
+          if (!remoteAction.current && socket && partyId && isHost) socket.emit("sync-pause", { videoId, partyId });
+          remoteAction.current = false;
+        }}
+        onSeeked={() => {
+          if (!remoteAction.current && socket && partyId && isHost && videoRef.current) socket.emit("sync-seek", { videoId, partyId, time: videoRef.current.currentTime });
+          remoteAction.current = false;
+        }}
         onWaiting={() => setWaiting(true)}
         onCanPlay={() => setWaiting(false)}
         onVolumeChange={(e) => { setVolume(e.target.volume); setMuted(e.target.muted); }}
@@ -337,10 +462,18 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
       )}
 
       {/* Big play button */}
-      {!playing && !waiting && !error && !showResume && (
+      {!playing && !waiting && !error && !showResume && (!partyId || isHost) && (
         <button onClick={togglePlay} className="absolute inset-0 m-auto w-[72px] h-[72px] flex items-center justify-center bg-rose-500/90 rounded-full text-white hover:bg-rose-500 hover:scale-105 active:scale-95 transition-all duration-200 z-10 shadow-[0_0_40px_rgba(225,29,72,0.4)]">
           <Play size={32} fill="currentColor" className="ml-1" />
         </button>
+      )}
+
+      {/* Viewer waiting for host indicator */}
+      {!playing && !waiting && !error && !showResume && partyId && !isHost && (
+        <div className="absolute inset-0 m-auto w-fit h-fit flex items-center gap-2 bg-black/60 backdrop-blur-md px-5 py-3 rounded-full text-white z-10 shadow-2xl border border-white/10">
+          <Users size={20} className="text-rose-400" />
+          <span className="font-semibold text-sm tracking-wide">Waiting for Host</span>
+        </div>
       )}
 
       {/* Skip animation overlays */}
@@ -418,14 +551,14 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
           <div className="flex items-center justify-between gap-2">
             {/* Left controls */}
             <div className="flex items-center gap-3">
-              <button onClick={togglePlay} className="text-white hover:text-rose-400 transition-colors p-1" title={playing ? "Pause (K)" : "Play (K)"}>
+              <button onClick={togglePlay} className={`text-white transition-colors p-1 ${partyId && !isHost ? 'opacity-50 cursor-not-allowed' : 'hover:text-rose-400'}`} title={playing ? "Pause (K)" : "Play (K)"}>
                 {playing ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" />}
               </button>
 
-              <button onClick={() => skip(-10)} className="text-white/80 hover:text-white transition-colors p-1" title="Back 10s (J)">
+              <button onClick={() => skip(-10)} className={`text-white/80 transition-colors p-1 ${partyId && !isHost ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`} title="Back 10s (J)">
                 <SkipBack size={18} />
               </button>
-              <button onClick={() => skip(10)} className="text-white/80 hover:text-white transition-colors p-1" title="Forward 10s (L)">
+              <button onClick={() => skip(10)} className={`text-white/80 transition-colors p-1 ${partyId && !isHost ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`} title="Forward 10s (L)">
                 <SkipForward size={18} />
               </button>
 

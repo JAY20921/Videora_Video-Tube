@@ -93,7 +93,7 @@ export async function generateChapters(segments) {
 
   // Build a condensed timestamped transcript
   const condensed = segments
-    .map((s) => `[${formatTime(s.start)}] ${s.text}`)
+    .map((s) => `[${Math.round(s.start)}s] ${s.text}`)
     .join("\n");
 
   // Truncate if too long
@@ -113,14 +113,14 @@ export async function generateChapters(segments) {
 Return ONLY valid JSON (no markdown, no code blocks) in this exact format:
 [
   { "title": "Chapter Title", "startTime": 0 },
-  { "title": "Chapter Title", "startTime": 125.5 }
+  { "title": "Chapter Title", "startTime": 125 }
 ]
 
 Rules:
 - The first chapter should always start at time 0 (the intro)
 - Create 3-8 chapters depending on video length
 - Chapter titles should be descriptive but concise (3-6 words)
-- startTime is in seconds (decimal allowed)
+- startTime must be an integer in seconds (extract this exactly from the [Xs] timestamps in the transcript)
 - Space chapters logically based on topic shifts, not evenly`,
         },
         {

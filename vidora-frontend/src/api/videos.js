@@ -103,3 +103,19 @@ export const retranscodeVideo = async (id) => {
   const res = await axios.post(`/videos/retranscode/${id}`);
   return res.data;
 };
+
+// Phase 7: Fetch recommendations for a video
+export const fetchRecommendations = async (id, limit = 6) => {
+  const res = await axios.get(`/videos/${id}/recommendations?limit=${limit}`);
+  const body = res.data;
+  
+  if (Array.isArray(body)) return body;
+  if (Array.isArray(body?.data)) return body.data;
+  
+  return [];
+};
+
+export const deleteVideo = async (id) => {
+  const res = await axios.delete(`/videos/${id}`);
+  return res.data;
+};

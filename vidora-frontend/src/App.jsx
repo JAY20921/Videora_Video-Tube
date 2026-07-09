@@ -18,6 +18,8 @@ const Landing       = lazy(() => import("./pages/Landing"));
 const Dashboard     = lazy(() => import("./pages/Dashboard"));
 const LikedVideos   = lazy(() => import("./pages/LikedVideos"));
 const Subscriptions = lazy(() => import("./pages/Subscriptions"));
+const StudyTogether = lazy(() => import("./pages/StudyTogether"));
+const SkillTree     = lazy(() => import("./pages/SkillTree"));
 
 // ─── Eagerly-loaded layout components (small, needed immediately) ─────────────
 import Navbar          from "./components/Navbar";
@@ -91,6 +93,8 @@ export default function App() {
                   <Route path="/video/:id"           element={<VideoPage />} />
                   <Route path="/liked"               element={<LikedVideos />} />
                   <Route path="/subscriptions"       element={<Subscriptions />} />
+                  <Route path="/study-together"      element={<StudyTogether />} />
+                  <Route path="/skill-tree/:id"      element={<SkillTree />} />
                   <Route
                     path="/upload"
                     element={<ProtectedRoute><Upload /></ProtectedRoute>}

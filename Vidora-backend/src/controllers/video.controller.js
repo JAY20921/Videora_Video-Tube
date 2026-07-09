@@ -111,7 +111,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
     );
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Redis connection timeout")), 2000)
+      setTimeout(() => reject(new Error("Redis connection timeout")), 10000)
     );
 
     await Promise.race([enqueuePromise, timeoutPromise]);
@@ -225,7 +225,7 @@ const updateVideo = asyncHandler(async (req, res) => {
 
   const video = await Video.findById(videoId);
   if (!video) throw new ApiError(404, "Video not found");
-  if (String(video.owner) !== String(req.user._id))
+  if (String(video.owner) !== String(req.user._id) && req.user.role !== "admin")
     throw new ApiError(403, "Not authorized to update this video");
 
   const { title, description } = req.body;
@@ -267,7 +267,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
 
   const video = await Video.findById(videoId);
   if (!video) throw new ApiError(404, "Video not found");
-  if (String(video.owner) !== String(req.user._id))
+  if (String(video.owner) !== String(req.user._id) && req.user.role !== "admin")
     throw new ApiError(403, "Not authorized to delete this video");
 
   // Phase 4 fix: use findOneAndDelete so Mongoose post('findOneAndDelete') hook fires
@@ -283,7 +283,7 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
 
   const video = await Video.findById(videoId);
   if (!video) throw new ApiError(404, "Video not found");
-  if (String(video.owner) !== String(req.user._id))
+  if (String(video.owner) !== String(req.user._id) && req.user.role !== "admin")
     throw new ApiError(403, "Not authorized to change publish status of this video");
 
   video.isPublished = !video.isPublished;
@@ -308,12 +308,29 @@ const retranscodeVideo = asyncHandler(async (req, res) => {
   const video = await Video.findById(videoId);
   if (!video) throw new ApiError(404, "Video not found");
   
-  if (String(video.owner) !== String(req.user._id)) {
+  if (String(video.owner) !== String(req.user._id) && req.user.role !== "admin") {
     throw new ApiError(403, "Not authorized to re-transcode this video");
   }
 
-  // Update status back to processing
+  // Reject if already processing
+  if (video.status === "processing") {
+    throw new ApiError(409, "Video is already being transcoded");
+  }
+
+  // Enforce 10-minute cooldown between retranscode attempts
+  if (video.lastTranscodeAt) {
+    const elapsed = Date.now() - new Date(video.lastTranscodeAt).getTime();
+    const cooldownMs = 10 * 60 * 1000; // 10 minutes
+    if (elapsed < cooldownMs) {
+      const remaining = Math.ceil((cooldownMs - elapsed) / 60000);
+      throw new ApiError(429, `Please wait ${remaining} minute${remaining > 1 ? "s" : ""} before retranscoding again`);
+    }
+  }
+
+  // Reset progress and update status
   video.status = "processing";
+  video.progress = 0;
+  video.lastTranscodeAt = new Date();
   await video.save();
 
   try {
@@ -325,11 +342,11 @@ const retranscodeVideo = asyncHandler(async (req, res) => {
         title: video.title,
         duration: Math.round(video.duration || 0)
       },
-      { jobId: `transcode-${video._id}` }
+      { jobId: `transcode-${video._id}-${Date.now()}` }
     );
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Redis connection timeout")), 2000)
+      setTimeout(() => reject(new Error("Redis connection timeout")), 10000)
     );
 
     await Promise.race([enqueuePromise, timeoutPromise]);
@@ -337,8 +354,9 @@ const retranscodeVideo = asyncHandler(async (req, res) => {
   } catch (queueError) {
     logger.warn({ err: queueError, videoId: video._id }, "Queue unavailable — video set to ready");
     video.status = "ready";
+    video.progress = 0;
     await video.save();
-    throw new ApiError(500, "Failed to enqueue transcoding job");
+    throw new ApiError(503, "Background processing queue is currently offline. Please ensure Redis is running to use transcoding.");
   }
 
   return res.status(200).json(new ApiResponse(200, video, "Video enqueued for re-transcoding"));
@@ -353,16 +371,90 @@ const getVideoStatus = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId");
 
-  const video = await Video.findById(videoId).select("status hlsUrl videoFile").lean();
+  const video = await Video.findById(videoId).select("status aiStatus hlsUrl videoFile progress").lean();
   if (!video) throw new ApiError(404, "Video not found");
 
   return res.status(200).json(
     new ApiResponse(200, {
       status: video.status,
+      aiStatus: video.aiStatus || "pending",
       hlsUrl: video.hlsUrl || "",
       videoFile: video.videoFile,
+      progress: video.progress || 0,
     }, "Video status fetched")
   );
+});
+
+const getRecommendations = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const limit = Math.max(parseInt(req.query.limit) || 6, 1);
+
+  if (!isValidObjectId(id)) throw new ApiError(400, "Invalid videoId");
+
+  const video = await Video.findById(id).select("tags");
+  if (!video) throw new ApiError(404, "Video not found");
+
+  const tags = video.tags || [];
+
+  if (tags.length === 0) {
+    const randomVideos = await Video.aggregate([
+      { $match: { _id: { $ne: new mongoose.Types.ObjectId(id) }, isPublished: true } },
+      { $sample: { size: limit } },
+      {
+         $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner"
+         }
+      },
+      { $unwind: "$owner" },
+      { $project: { "owner.password": 0, "owner.refreshToken": 0, "owner.email": 0 } }
+    ]);
+    return res.status(200).json(new ApiResponse(200, randomVideos, "Recommendations fetched"));
+  }
+
+  const recommended = await Video.aggregate([
+    { $match: { _id: { $ne: new mongoose.Types.ObjectId(id) }, isPublished: true, tags: { $in: tags } } },
+    {
+      $addFields: {
+        score: { $size: { $setIntersection: ["$tags", tags] } }
+      }
+    },
+    { $sort: { score: -1, views: -1 } },
+    { $limit: limit },
+    {
+       $lookup: {
+          from: "users",
+          localField: "owner",
+          foreignField: "_id",
+          as: "owner"
+       }
+    },
+    { $unwind: "$owner" },
+    { $project: { "owner.password": 0, "owner.refreshToken": 0, "owner.email": 0 } }
+  ]);
+
+  // Fallback to random if not enough tag matches
+  if (recommended.length < limit) {
+    const randomVideos = await Video.aggregate([
+      { $match: { _id: { $ne: new mongoose.Types.ObjectId(id) }, isPublished: true, _id: { $nin: recommended.map(r => r._id) } } },
+      { $sample: { size: limit - recommended.length } },
+      {
+         $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "owner"
+         }
+      },
+      { $unwind: "$owner" },
+      { $project: { "owner.password": 0, "owner.refreshToken": 0, "owner.email": 0 } }
+    ]);
+    recommended.push(...randomVideos);
+  }
+
+  return res.status(200).json(new ApiResponse(200, recommended, "Recommendations fetched"));
 });
 
 export {
@@ -375,4 +467,5 @@ export {
   deleteVideo,
   togglePublishStatus,
   retranscodeVideo,
+  getRecommendations,
 };

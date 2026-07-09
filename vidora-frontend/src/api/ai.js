@@ -28,3 +28,12 @@ export const getAiStatus = async (videoId) => {
   const res = await api.get(`/ai/status/${videoId}`);
   return res.data?.data ?? { aiStatus: "pending" };
 };
+
+/**
+ * POST /ai/skill-tree
+ * Generate a dynamic learning path based on a topic.
+ */
+export const generateSkillTree = async (topic) => {
+  const res = await api.post("/ai/skill-tree", { topic });
+  return res.data?.data ?? res.data;
+};
