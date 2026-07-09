@@ -164,12 +164,11 @@ async function processVideoJob(job) {
     job.updateProgress(70);
     await Video.findByIdAndUpdate(videoId, { progress: 70 });
 
-    // Upload HLS
     // Upload HLS in parallel batches to speed things up
     const hlsFiles = await fs.readdir(hlsDir);
     logger.info({ videoId, totalFiles: hlsFiles.length }, "Uploading HLS segments to Cloudinary...");
     const uploadedFiles = {};
-    const BATCH_SIZE = 5; // Upload 5 segments concurrently
+    const BATCH_SIZE = 2; // Reduced to 2 to save memory on 512MB free tiers
 
     const totalBatches = Math.ceil(hlsFiles.length / BATCH_SIZE);
     for (let i = 0; i < hlsFiles.length; i += BATCH_SIZE) {

@@ -17,6 +17,9 @@ COPY . .
 # Create tmp directories for workers
 RUN mkdir -p tmp_video_processing tmp_ai_processing
 
+# Restrict Node.js memory to prevent OOM on 512MB Free Tier (leaves room for FFmpeg)
+ENV NODE_OPTIONS="--max-old-space-size=256"
+
 # Expose main API port
 EXPOSE 8000
 
