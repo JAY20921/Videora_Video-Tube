@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Trash2 } from "lucide-react";
+import { optimizeCloudinaryUrl } from "../utils/cloudinary";
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -42,7 +43,7 @@ export default function VideoCard({ video, onDelete }) {
         {/* Thumbnail */}
         <div className="relative aspect-video bg-neutral-800 overflow-hidden">
           <img
-            src={video.thumbnailUrl || video.thumbnail}
+            src={optimizeCloudinaryUrl(video.thumbnailUrl || video.thumbnail, { w: 600 })}
             alt={video.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             loading="lazy"
@@ -58,7 +59,7 @@ export default function VideoCard({ video, onDelete }) {
           {/* Owner avatar */}
           {video.owner?.avatar && (
             <div className="w-8 h-8 rounded-full overflow-hidden bg-neutral-700 flex-shrink-0 mt-0.5">
-              <img src={video.owner.avatar} alt="" className="w-full h-full object-cover" />
+              <img src={optimizeCloudinaryUrl(video.owner.avatar, { w: 100, h: 100 })} alt="" className="w-full h-full object-cover" />
             </div>
           )}
           <div className="min-w-0 flex-1">

@@ -25,7 +25,7 @@ function Login() {
       toast("Logged in", { type: "success" });
       navigate("/");
     } catch (err) {
-      toast("Invalid email or password", { type: "error" });
+      toast(err.response?.data?.message || "Invalid email or password", { type: "error" });
     }
   };
 

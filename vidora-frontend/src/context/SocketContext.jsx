@@ -19,8 +19,8 @@ export const SocketProvider = ({ children }) => {
     // In dev, the Vite proxy handles /api, but websockets usually go to a direct port.
     // Assuming backend is at http://localhost:8000 in dev
     
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
-    
+    const rawBase = import.meta.env.VITE_API_BASE;
+    const backendUrl = rawBase ? rawBase.replace(/\/+$/, "") : "http://localhost:8000";
     const newSocket = io(backendUrl, {
       withCredentials: true,
       autoConnect: false,
