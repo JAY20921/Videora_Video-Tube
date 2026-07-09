@@ -37,6 +37,12 @@ export const uploadOnCloudinary = async (localFilePath, folder = "misc", resourc
         uploadOptions,
         (error, result) => {
           if (error) return reject(error);
+          
+          // Force secure URLs to avoid Mixed Content errors on the frontend
+          if (result && result.secure_url) {
+            result.url = result.secure_url;
+          }
+          
           resolve(result);
         }
       );
