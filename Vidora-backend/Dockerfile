@@ -1,7 +1,7 @@
-FROM node:20-alpine
+FROM node:20-slim
 
-# Install FFmpeg and libc6-compat (required for onnxruntime/AI embeddings)
-RUN apk add --no-cache ffmpeg libc6-compat
+# Install FFmpeg (node:20-slim uses Debian, so we use apt-get)
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -24,5 +24,5 @@ ENV NODE_OPTIONS="--max-old-space-size=256"
 # Expose main API port
 EXPOSE 8000
 
-# Default command (can be overridden by docker-compose for workers)
+# Default command
 CMD ["npm", "start"]
