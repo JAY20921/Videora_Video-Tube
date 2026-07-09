@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Install FFmpeg which is required for the video and AI workers
-RUN apk add --no-cache ffmpeg
+# Install FFmpeg and libc6-compat (required for onnxruntime/AI embeddings)
+RUN apk add --no-cache ffmpeg libc6-compat
 
 WORKDIR /app
 

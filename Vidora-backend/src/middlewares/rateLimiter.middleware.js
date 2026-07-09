@@ -27,7 +27,7 @@ const rateLimitHandler = (req, res) => {
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 50,
   skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,

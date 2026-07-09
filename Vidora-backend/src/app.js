@@ -9,6 +9,9 @@ import { generalLimiter } from "./middlewares/rateLimiter.middleware.js";
 
 const app = express();
 
+// ─── Trust Proxy (for Render load balancer & rate limiting) ──────────────────
+app.set("trust proxy", 1);
+
 // ─── Security headers (must be first) ────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }

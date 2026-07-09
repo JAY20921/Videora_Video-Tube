@@ -21,6 +21,8 @@ const fmt = (s) => {
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
+const ensureHttps = (u) => typeof u === 'string' ? u.replace(/^http:\/\//i, 'https://') : u;
+
 /* ──────────────────────── component ──────────────────────── */
 const PlayerWrapper = forwardRef(function PlayerWrapper({
   videoId, url, hlsUrl, poster,
@@ -65,7 +67,7 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
 
   // Processing status
   const [status, setStatus] = useState(initialStatus || "ready");
-  const [effectiveUrl, setEffectiveUrl] = useState(hlsUrl || url);
+  const [effectiveUrl, setEffectiveUrl] = useState(ensureHttps(hlsUrl || url));
 
   const { resumeTimeRef } = useVideoProgress(videoId, videoRef);
   const socket = useSocket();
@@ -178,7 +180,7 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
     const iv = setInterval(async () => {
       try {
         const r = await getVideoStatus(videoId);
-        if (r.status === "ready") { setStatus("ready"); setEffectiveUrl(r.hlsUrl || r.videoFile || url); clearInterval(iv); }
+        if (r.status === "ready") { setStatus("ready"); setEffectiveUrl(ensureHttps(r.hlsUrl || r.videoFile || url)); clearInterval(iv); }
         else if (r.status === "failed") { setStatus("failed"); setError("Processing failed."); clearInterval(iv); }
       } catch {}
     }, 5000);
@@ -348,7 +350,7 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
     if (!spritesheetUrl || hoverTime === null) return {};
     const fi = Math.floor(hoverTime / 10);
     return {
-      backgroundImage: `url(${spritesheetUrl})`,
+      backgroundImage: `url(${ensureHttps(spritesheetUrl)})`,
       backgroundPosition: `-${(fi % 10) * 160}px -${Math.floor(fi / 10) * 90}px`,
       backgroundSize: "1600px", width: "160px", height: "90px",
     };
@@ -372,7 +374,7 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
       : "Complete!";
     return (
       <div className="relative bg-black rounded-2xl overflow-hidden shadow-2xl aspect-video flex items-center justify-center">
-        {poster && <img src={poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm" />}
+        {poster && <img src={ensureHttps(poster)} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm" />}
         <div className="relative z-10 flex flex-col items-center gap-5 text-white w-full max-w-sm px-6">
           <div className="relative">
             <div className="absolute inset-0 rounded-full bg-rose-500/20 animate-ping" />
@@ -425,7 +427,7 @@ const PlayerWrapper = forwardRef(function PlayerWrapper({
       {/* Video element */}
       <video
         ref={videoRef}
-        poster={poster}
+        poster={ensureHttps(poster)}
         className="absolute inset-0 w-full h-full object-contain"
         playsInline
         onClick={togglePlay}
