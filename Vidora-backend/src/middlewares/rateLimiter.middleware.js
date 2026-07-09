@@ -27,7 +27,7 @@ const rateLimitHandler = (req, res) => {
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50,
+  max: 100,
   skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,
@@ -40,7 +40,7 @@ export const authLimiter = rateLimit({
  */
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
+  max: 200,
   skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,
@@ -54,7 +54,7 @@ export const uploadLimiter = rateLimit({
  */
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: 2000,
   skip: skipInDev,
   standardHeaders: true,
   legacyHeaders: false,
