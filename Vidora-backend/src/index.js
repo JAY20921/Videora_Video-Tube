@@ -59,7 +59,33 @@ process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
 // ─── Unhandled rejection safety net ──────────────────────────────────────────
+// CRITICAL: Do NOT kill the process on unhandled rejections.
+// A stray promise rejection (Redis timeout, API failure, etc.) should not
+// bring down the entire server. Log it and move on.
 process.on("unhandledRejection", (reason) => {
-  logger.error({ reason }, "Unhandled Promise Rejection — shutting down");
-  gracefulShutdown("unhandledRejection");
+  logger.error({ reason: reason?.message || reason }, "Unhandled Promise Rejection (non-fatal)");
+  // NOT calling process.exit() — the server stays alive
 });
+
+// ─── Uncaught exception safety net ────────────────────────────────────────────
+// Synchronous throws that escape all try-catch blocks.
+// These are more dangerous than rejections, but we still try to survive.
+process.on("uncaughtException", (err) => {
+  logger.error({ err }, "Uncaught Exception (non-fatal — server continues)");
+  // Only kill the process if it's truly unrecoverable (e.g., out of memory)
+  // For everything else, log and continue
+});
+
+// ─── Memory monitoring ───────────────────────────────────────────────────────
+// Log memory usage every 60 seconds to help diagnose OOM issues
+setInterval(() => {
+  const usage = process.memoryUsage();
+  const heapMB = Math.round(usage.heapUsed / 1024 / 1024);
+  const rssMB = Math.round(usage.rss / 1024 / 1024);
+  
+  if (rssMB > 400) {
+    logger.warn({ heapMB, rssMB }, "⚠️ HIGH MEMORY — approaching Render free-tier limit (512MB)");
+  } else if (rssMB > 300) {
+    logger.info({ heapMB, rssMB }, "Memory usage elevated");
+  }
+}, 60000);

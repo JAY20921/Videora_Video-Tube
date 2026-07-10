@@ -16,9 +16,24 @@ export const initSocket = (server) => {
   });
 
   // Setup Redis Adapter for multi-server scaling
-  const pubClient = new Redis(redisConfig);
-  const subClient = pubClient.duplicate();
-  io.adapter(createAdapter(pubClient, subClient));
+  // CRITICAL: Error handlers MUST be attached before any I/O.
+  // Without them, Redis disconnect emits an unhandled 'error' event
+  // which crashes the entire Node.js process.
+  try {
+    const pubClient = new Redis({ ...redisConfig, retryStrategy: (times) => Math.min(times * 500, 5000) });
+    const subClient = pubClient.duplicate();
+
+    pubClient.on("error", (err) => {
+      logger.warn({ err: err.message }, "Socket.IO Redis pubClient error (non-fatal)");
+    });
+    subClient.on("error", (err) => {
+      logger.warn({ err: err.message }, "Socket.IO Redis subClient error (non-fatal)");
+    });
+
+    io.adapter(createAdapter(pubClient, subClient));
+  } catch (err) {
+    logger.warn({ err: err.message }, "Redis adapter setup failed — Socket.IO running without clustering");
+  }
 
   // Watch Parties State (In-memory for now, move to Redis for multi-server)
   const watchparties = new Map();

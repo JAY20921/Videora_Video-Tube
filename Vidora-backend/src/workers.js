@@ -38,6 +38,23 @@ import ffmpeg from "ffmpeg-static";
 
 const execAsync = promisify(exec);
 
+// ─── FFmpeg timeout (10 minutes max per profile) ─────────────────────────────
+const FFMPEG_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * Force garbage collection if available, otherwise just log memory.
+ * Helps prevent gradual OOM on constrained environments.
+ */
+function cleanupMemory(context) {
+  if (global.gc) {
+    global.gc();
+  }
+  const usage = process.memoryUsage();
+  const rssMB = Math.round(usage.rss / 1024 / 1024);
+  const heapMB = Math.round(usage.heapUsed / 1024 / 1024);
+  logger.info({ context, rssMB, heapMB }, "Memory after cleanup");
+}
+
 // Keep references so we can shut them down gracefully
 const _workers = [];
 
@@ -105,7 +122,7 @@ async function runSequentialTranscoding(inputPath, outputDir, videoId) {
 
     const cmd = cmdArgs.join(" ");
 
-    await execAsync(cmd, { maxBuffer: 50 * 1024 * 1024 });
+    await execAsync(cmd, { maxBuffer: 50 * 1024 * 1024, timeout: FFMPEG_TIMEOUT_MS });
   }
 
   const masterContent = [
@@ -149,7 +166,7 @@ async function processVideoJob(job) {
     logger.info({ videoId }, "Generating spritesheet...");
     const spritePath = path.join(jobDir, "sprite.jpg");
     const spriteCmd = `"${ffmpeg}" -i "${inputPath}" -vf "fps=1/10,scale=160:-1,tile=10x10" -frames:v 1 -y "${spritePath}"`;
-    await execAsync(spriteCmd).catch(e => logger.warn("Spritesheet generation failed: " + e.message));
+    await execAsync(spriteCmd, { timeout: 60000 }).catch(e => logger.warn("Spritesheet generation failed: " + e.message));
 
     let spritesheetUrl = "";
     try {
@@ -231,6 +248,7 @@ async function processVideoJob(job) {
       await Video.findByIdAndUpdate(videoId, { aiStatus: "skipped" });
     }
 
+    cleanupMemory("video-job-done");
     return { videoId, hlsUrl: masterUrl };
   } catch (error) {
     await Video.findByIdAndUpdate(videoId, { status: "failed" }).catch(() => {});
@@ -355,6 +373,7 @@ async function processAiJob(job) {
       "AI processing completed successfully"
     );
 
+    cleanupMemory("ai-job-done");
     return { videoId, transcriptId: String(transcript._id) };
   } catch (error) {
     transcript.status = "failed";

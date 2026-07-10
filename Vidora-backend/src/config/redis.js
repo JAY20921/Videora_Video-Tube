@@ -12,6 +12,12 @@ const redisConfig = {
   username: process.env.REDIS_USERNAME || "default",
   password: process.env.REDIS_PASSWORD || undefined,
   maxRetriesPerRequest: null, // Required by BullMQ
+  retryStrategy: (times) => {
+    // Reconnect with exponential backoff, max 10 seconds
+    const delay = Math.min(times * 500, 10000);
+    logger.warn({ attempt: times, delayMs: delay }, "Redis reconnecting...");
+    return delay;
+  },
 };
 
 /**
