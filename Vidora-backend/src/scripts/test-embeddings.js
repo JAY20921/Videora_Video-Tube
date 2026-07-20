@@ -2,8 +2,8 @@ import "dotenv/config";
 import { embedTexts } from "../services/embedding.service.js";
 import { ensureCollection } from "../config/qdrant.js";
 
-async function testLocalEmbeddings() {
-  console.log("🚀 Testing Local Xenova Embeddings...");
+async function testCloudEmbeddings() {
+  console.log("🚀 Testing HuggingFace Cloud Embeddings...");
   
   try {
     const texts = [
@@ -34,4 +34,4 @@ async function testLocalEmbeddings() {
   process.exit(0);
 }
 
-testLocalEmbeddings();
+testCloudEmbeddings();

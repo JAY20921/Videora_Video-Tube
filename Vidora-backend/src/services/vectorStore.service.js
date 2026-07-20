@@ -98,8 +98,8 @@ export async function searchSimilar(queryVector, videoId = null, topK = 5) {
 
   const results = await client.search(collectionName, searchParams);
 
-  // Filter out low-quality results (score < 0.3 means the chunk is likely irrelevant)
-  const MIN_SCORE = 0.3;
+  // Filter out low-quality results (score < 0.20 means the chunk is likely irrelevant)
+  const MIN_SCORE = 0.20;
   return results
     .filter((r) => r.score >= MIN_SCORE)
     .map((r) => ({

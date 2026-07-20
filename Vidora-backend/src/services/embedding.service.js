@@ -1,77 +1,72 @@
 /**
  * Phase 5: Embedding generation service (Cloud-only).
  *
- * Generates vector embeddings for text chunks using HuggingFace Inference API.
- * Offloads CPU processing from the server to run efficiently on Render's free tier.
+ * Generates vector embeddings for text chunks using the official
+ * @huggingface/inference SDK which auto-selects the best available
+ * inference provider (Serverless, Dedicated, etc.).
+ *
  * Model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384 dimensions)
  *
  * IMPORTANT: The local Xenova fallback has been REMOVED because it loads a ~400MB
  * ML model into RAM which causes OOM crashes on Render's 512MB free tier.
- * If the cloud API is unavailable, we use zero-vector placeholders instead.
- * The video still works — just semantic search won't match for those chunks.
+ * The raw fetch to api-inference.huggingface.co has also been replaced with the
+ * official SDK because that domain is unreachable from some networks/ISPs.
  */
+import { HfInference } from "@huggingface/inference";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
 
 const MODEL_ID = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
-const HF_API_URL = `https://api-inference.huggingface.co/pipeline/feature-extraction/${MODEL_ID}`;
 const BATCH_SIZE = 32;
-const EMBEDDING_DIMS = 384;
+
+let _hf = null;
 
 /**
- * Fetch embeddings with auto-retry for model cold starts.
- * Uses AbortController to enforce a 30s timeout per request.
+ * Get or create the HuggingFace Inference client singleton.
+ */
+function getHfClient() {
+  if (!_hf) {
+    if (!config.huggingFace.token) {
+      throw new Error("HF_TOKEN is not set in environment variables");
+    }
+    _hf = new HfInference(config.huggingFace.token);
+    logger.info("HuggingFace Inference client initialized");
+  }
+  return _hf;
+}
+
+/**
+ * Fetch embeddings for a batch of texts with auto-retry.
+ * Uses the official HF SDK which handles provider selection and routing.
  */
 async function fetchEmbeddingsWithRetry(texts, retries = 3) {
-  if (!config.huggingFace.token) {
-    throw new Error("HF_TOKEN is not set in environment variables");
-  }
+  const hf = getHfClient();
 
   for (let i = 0; i < retries; i++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
-
     try {
-      const response = await fetch(HF_API_URL, {
-        headers: {
-          Authorization: `Bearer ${config.huggingFace.token}`,
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-        body: JSON.stringify({ inputs: texts }),
-        signal: controller.signal,
+      // The SDK returns a number[] for single input, number[][] for batch
+      const result = await hf.featureExtraction({
+        model: MODEL_ID,
+        inputs: texts,
       });
 
-      clearTimeout(timeout);
+      return result;
+    } catch (err) {
+      const errMsg = err.message || String(err);
 
-      const result = await response.json();
-
-      if (response.ok) {
-        return result;
-      }
-
-      // Handle Hugging Face cold start "model is currently loading" error
-      if (result.error && result.error.includes("currently loading")) {
-        const waitTime = Math.min((result.estimated_time || 20) * 1000, 60000); // cap at 60s
+      // Handle HuggingFace cold start "model is currently loading" error
+      if (errMsg.includes("currently loading") || errMsg.includes("loading")) {
+        const waitTime = Math.min(20000, 60000); // 20s default, cap at 60s
         logger.warn(`HuggingFace model is loading. Retrying in ${Math.round(waitTime / 1000)}s...`);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
         continue;
       }
 
-      throw new Error(`HuggingFace API error: ${JSON.stringify(result)}`);
-    } catch (err) {
-      clearTimeout(timeout);
-
-      if (err.name === "AbortError") {
-        logger.warn({ attempt: i + 1 }, "HuggingFace API request timed out (30s)");
-        if (i < retries - 1) continue;
-        throw new Error("HuggingFace API timed out after all retries");
-      }
-
-      // For network errors, retry
-      if (i < retries - 1 && (err.message.includes("fetch failed") || err.message.includes("network"))) {
-        logger.warn({ err: err.message, attempt: i + 1 }, "HuggingFace API network error, retrying...");
-        await new Promise((resolve) => setTimeout(resolve, 3000 * (i + 1))); // backoff
+      // For network / transient errors, retry with backoff
+      if (i < retries - 1) {
+        const backoff = 3000 * (i + 1);
+        logger.warn({ err: errMsg, attempt: i + 1 }, `HuggingFace API error, retrying in ${backoff}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, backoff));
         continue;
       }
 
@@ -83,9 +78,6 @@ async function fetchEmbeddingsWithRetry(texts, retries = 3) {
 
 /**
  * Generate embeddings for an array of text strings.
- *
- * Falls back to zero-vector placeholders if the cloud API is unavailable.
- * This prevents OOM crashes from loading the local Xenova model (~400MB RAM).
  *
  * @param {string[]} texts - Array of text chunks to embed
  * @returns {Promise<number[][]>} Array of embedding vectors (each is float[384])
@@ -100,13 +92,15 @@ export async function embedTexts(texts) {
     const batch = texts.slice(i, i + BATCH_SIZE);
 
     try {
-      const batchEmbeddings = await fetchEmbeddingsWithRetry(batch);
+      const batchResult = await fetchEmbeddingsWithRetry(batch);
 
-      // If HF returns a 1D array for a single input, wrap it
-      if (batch.length === 1 && typeof batchEmbeddings[0] === 'number') {
-        allEmbeddings.push(batchEmbeddings);
+      // Normalize the result shape:
+      // - Single text: SDK may return a flat number[] → wrap it
+      // - Multiple texts: SDK returns number[][] → use as-is
+      if (batch.length === 1 && typeof batchResult[0] === "number") {
+        allEmbeddings.push(batchResult);
       } else {
-        allEmbeddings.push(...batchEmbeddings);
+        allEmbeddings.push(...batchResult);
       }
 
       logger.debug(
@@ -114,22 +108,14 @@ export async function embedTexts(texts) {
         "Cloud embedding batch processed"
       );
     } catch (err) {
-      // ═══════════════════════════════════════════════════════════════════
-      // CRITICAL FIX: Use zero-vector placeholders instead of Xenova local
-      // model. The Xenova model loads ~400MB into RAM and causes OOM crashes
-      // on Render's 512MB free tier, killing the entire server process.
-      // Zero vectors mean semantic search won't work for these chunks,
-      // but the video, transcript, chapters, and knowledge graph all still
-      // function perfectly. Embeddings can be regenerated later.
-      // ═══════════════════════════════════════════════════════════════════
-      logger.warn(
-        { err: err.message, batch: `${i + 1}-${i + batch.length}` },
-        "Cloud embedding failed — using zero-vector placeholders (Xenova local disabled to prevent OOM)"
+      logger.error(
+        { err: err.message, batch: `${i + 1}-${i + batch.length}`, total: texts.length },
+        "Embedding generation failed"
       );
-
-      for (let j = 0; j < batch.length; j++) {
-        allEmbeddings.push(new Array(EMBEDDING_DIMS).fill(0));
-      }
+      // Let the error propagate to the AI worker, which will mark
+      // the job as failed and set aiStatus = "failed" in MongoDB.
+      // The video itself remains playable — only AI features are skipped.
+      throw err;
     }
   }
 

@@ -12,7 +12,7 @@ let _client = null;
 let _collectionReady = false;
 
 // Embedding dimension — must match the model used in embedding.service.js
-// Xenova all-MiniLM-L6-v2 = 384 dimensions
+// HuggingFace cloud: paraphrase-multilingual-MiniLM-L12-v2 = 384 dimensions
 export const VECTOR_SIZE = 384;
 
 /**

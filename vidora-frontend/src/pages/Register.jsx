@@ -14,7 +14,7 @@ function Register() {
   const [confirm, setConfirm] = useState("");
   const [avatar, setAvatar] = useState(null);
   const [coverImage, setCoverImage] = useState(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,18 +25,18 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
+    setError([]);
 
     if (password !== confirm) {
-      setError("Passwords do not match");
+      setError(["Passwords do not match"]);
       return;
     }
     if (!fullName || !email || !username || !password) {
-      setError("All fields are required");
+      setError(["All fields are required"]);
       return;
     }
     if (!avatar) {
-      setError("Avatar is required");
+      setError(["Avatar is required"]);
       return;
     }
 
@@ -61,7 +61,14 @@ function Register() {
       toast("Account created and logged in successfully!", { type: "success" });
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.message || "Registration failed. Try again.");
+      const data = err.response?.data;
+      // Handle Zod validation error arrays from the backend
+      if (data?.errors && Array.isArray(data.errors) && data.errors.length > 0) {
+        const messages = data.errors.map(e => e.message || e.field).filter(Boolean);
+        setError(messages.length > 0 ? messages : [data.message || "Registration failed"]);
+      } else {
+        setError([data?.message || "Registration failed. Try again."]);
+      }
     } finally {
       setLoading(false);
     }
@@ -101,9 +108,24 @@ function Register() {
             <p className="text-sm text-neutral-400">Join Vidora and start sharing</p>
           </div>
 
-          {error && (
-            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm rounded-lg px-4 py-2.5 mb-6 text-center">
-              {error}
+          {error && Array.isArray(error) && error.length > 0 && (
+            <div className="bg-rose-500/10 border border-rose-500/30 text-rose-400 text-sm rounded-xl px-4 py-3 mb-6">
+              {error.length === 1 ? (
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 flex items-center justify-center bg-rose-500 text-white rounded-full text-[10px] font-bold shrink-0">!</span>
+                  <span>{error[0]}</span>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-2 font-semibold mb-1.5">
+                    <span className="w-5 h-5 flex items-center justify-center bg-rose-500 text-white rounded-full text-[10px] font-bold shrink-0">!</span>
+                    Please fix the following:
+                  </div>
+                  <ul className="list-disc pl-9 space-y-0.5">
+                    {error.map((msg, i) => <li key={i}>{msg}</li>)}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
